@@ -25,6 +25,11 @@ class AppointmentResponse(BaseModel):
     service: str
 
 
+class VectorSearch(BaseModel):
+    query: str
+    filter: dict
+
+
 @app.post("/book-appointment", response_model=AppointmentResponse)
 def book_appointment(request: AppointmentRequest):
     # Generate a new appointment ID
@@ -53,8 +58,10 @@ pg_vector = PGVectorStore()
 
 
 @app.post("/vector-info")
-def get_vector_info(query: str):
-    retrieved_docs = pg_vector.similarity_search(query=query, filter={}, k=10)
+def get_vector_info(obj: VectorSearch):
+    retrieved_docs = pg_vector.similarity_search(
+        query=obj.query, filter=obj.filter, k=10
+    )
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
     if not retrieved_texts:
