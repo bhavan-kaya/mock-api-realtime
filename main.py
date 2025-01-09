@@ -30,6 +30,9 @@ class VectorSearch(BaseModel):
     filter: dict
 
 
+pg_vector = PGVectorStore()
+
+
 @app.post("/book-appointment", response_model=AppointmentResponse)
 def book_appointment(request: AppointmentRequest):
     # Generate a new appointment ID
@@ -43,6 +46,23 @@ def book_appointment(request: AppointmentRequest):
         "service": request.service,
     }
     appointments.append(appointment)
+
+    try:
+        from langchain_core.documents import Document
+
+        docs = [
+            Document(
+                page_content=str(appointment),
+                metadata={
+                    "id": 1,
+                    "topic": "maintenance",
+                },
+            )
+        ]
+        pg_vector.add_documents(docs)
+    except Exception as e:
+        print(e)
+
     return appointment
 
 
@@ -52,9 +72,6 @@ def get_vehicle_details(vehicle_id: str):
     if not vehicle:
         return {"make": "Ferrari", "model": "Model X", "year": 2024}
     return vehicle
-
-
-pg_vector = PGVectorStore()
 
 
 @app.post("/vector-info")
