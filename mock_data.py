@@ -2,83 +2,73 @@ from langchain_core.documents import Document
 
 docs = [
     Document(
-        page_content="Customer prefers evening appointments and has a busy morning schedule.",
+        page_content="John Smith prefers evening appointments due to his busy morning schedule.",
         metadata={
             "id": 1,
-            "customer_id": "C123",
-            "preference": "evening",
-            "topic": "appointment",
+            "topic": "maintenance",
         },
     ),
     Document(
-        page_content="Customer reported frequent brake issues in the last visit.",
+        page_content="Emily Johnson reported frequent brake issues with her Honda Civic (Vehicle ID: 467) during her last visit.",
         metadata={
             "id": 2,
-            "customer_id": "C124",
-            "vehicle_id": "V5678",
-            "topic": "vehicle_issues",
+            "topic": "maintenance",
         },
     ),
     Document(
-        page_content="Vehicle Toyota Camry requires an oil change and tire rotation service.",
+        page_content="Michael Brown’s Toyota Camry (Vehicle ID: 123) requires an oil change and tire rotation service.",
         metadata={
             "id": 3,
-            "vehicle_id": "1234-ABC",
-            "service_due": "oil change",
             "topic": "maintenance",
         },
     ),
     Document(
-        page_content="Customer requested a quote for replacing car windshield wipers.",
+        page_content="Sarah Davis requested a quote for replacing windshield wipers for her Ford Mustang (Vehicle ID: 568).",
         metadata={
             "id": 4,
-            "customer_id": "C125",
-            "vehicle_id": "9101-GHI",
-            "topic": "quote_request",
-        },
-    ),
-    Document(
-        page_content="The community center offers yoga classes every Saturday morning.",
-        metadata={"id": 5, "location": "community center", "topic": "events"},
-    ),
-    Document(
-        page_content="Customer has a scheduled service appointment on January 15th at 10:00 AM.",
-        metadata={
-            "id": 6,
-            "customer_id": "C126",
-            "appointment_date": "2025-01-15",
-            "topic": "appointment",
-        },
-    ),
-    Document(
-        page_content="A special discount on brake pad replacement is available this month.",
-        metadata={
-            "id": 7,
-            "offer_id": "D789",
-            "valid_until": "2025-01-31",
-            "topic": "offers",
-        },
-    ),
-    Document(
-        page_content="The library is hosting a workshop on effective car maintenance tips.",
-        metadata={"id": 8, "location": "library", "topic": "events"},
-    ),
-    Document(
-        page_content="Tesla Model 3 is due for its annual maintenance check-up.",
-        metadata={
-            "id": 9,
-            "vehicle_id": "9101-GHI",
-            "service_due": "annual maintenance",
             "topic": "maintenance",
         },
     ),
     Document(
-        page_content="Customer prefers communication via email for service updates.",
+        page_content="David Wilson has enrolled in a workshop on effective car maintenance tips at the local library.",
+        metadata={
+            "id": 5,
+            "topic": "maintenance",
+        },
+    ),
+    Document(
+        page_content="Jessica Martinez has a scheduled service appointment for her Tesla Model 3 (Vehicle ID: 102) on January 15th at 10:00 AM.",
+        metadata={
+            "id": 6,
+            "topic": "maintenance",
+        },
+    ),
+    Document(
+        page_content="A special discount on brake pad replacement is available for vehicles like Michael Green’s Chevrolet Camaro (Vehicle ID: 902) this month.",
+        metadata={
+            "id": 7,
+            "topic": "maintenance",
+        },
+    ),
+    Document(
+        page_content="Sophia Taylor’s Tesla Model S (Vehicle ID: 910) is due for its annual maintenance check-up next month.",
+        metadata={
+            "id": 8,
+            "topic": "maintenance",
+        },
+    ),
+    Document(
+        page_content="Customer Robert Anderson prefers communication via email for updates on his vehicle's service progress.",
+        metadata={
+            "id": 9,
+            "topic": "maintenance",
+        },
+    ),
+    Document(
+        page_content="Victoria Clark has asked for recommendations on eco-friendly car maintenance products for her Honda Civic (Vehicle ID: 467).",
         metadata={
             "id": 10,
-            "customer_id": "C127",
-            "contact_preference": "email",
-            "topic": "customer_preference",
+            "topic": "maintenance",
         },
     ),
 ]
@@ -86,7 +76,10 @@ docs = [
 
 # Mock data for demonstration purposes
 vehicles = {
-    "1234-ABC": {"make": "Toyota", "model": "Camry", "year": 2020},
-    "5678-DEF": {"make": "Honda", "model": "Civic", "year": 2022},
-    "9101-GHI": {"make": "Tesla", "model": "Model 3", "year": 2023},
+    "123": {"make": "Toyota", "model": "Camry", "year": 2020},
+    "467": {"make": "Honda", "model": "Civic", "year": 2022},
+    "102": {"make": "Tesla", "model": "Model 3", "year": 2023},
+    "910": {"make": "Tesla", "model": "Model S", "year": 2021},
+    "568": {"make": "Ford", "model": "Mustang", "year": 2019},
+    "902": {"make": "Chevrolet", "model": "Camaro", "year": 2020},
 }
