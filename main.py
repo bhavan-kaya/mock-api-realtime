@@ -1,7 +1,9 @@
+from typing import List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from rag import PGVectorStore
 from mock_data import vehicles, docs
+from langchain_core.documents import Document
 
 app = FastAPI()
 appointments = []
@@ -30,6 +32,10 @@ class VectorSearch(BaseModel):
     filter: dict
 
 
+class VectorLoad(BaseModel):
+    docs: List[str]
+
+
 pg_vector = PGVectorStore()
 
 
@@ -48,7 +54,6 @@ def book_appointment(request: AppointmentRequest):
     appointments.append(appointment)
 
     try:
-        from langchain_core.documents import Document
 
         docs = [
             Document(
@@ -89,6 +94,22 @@ def get_vector_info(obj: VectorSearch):
 
 @app.get("/vector-store/load")
 def load_vector_info():
+    pg_vector.add_documents(docs)
+    return f"Loaded {len(docs)} documents into the vector store."
+
+
+@app.get("/vector-store/load-docs")
+def load_vector_info(load: VectorLoad):
+    docs = [
+        Document(
+            page_content=str(doc),
+            metadata={
+                "id": index,
+                "topic": "maintenance",
+            },
+        )
+        for index, doc in enumerate(load.docs)
+    ]
     pg_vector.add_documents(docs)
     return f"Loaded {len(docs)} documents into the vector store."
 
