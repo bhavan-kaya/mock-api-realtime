@@ -90,7 +90,9 @@ class PGVectorStore:
                 """
 
             with self.connection.cursor() as cur:
-                cur.execute(query_sql, (self._collection_id, embedding, k))
+                cur.execute(
+                    query_sql, ("a48cfbe5-f71b-4138-af8a-c0b570445b0b", embedding, k)
+                )
                 results = cur.fetchall()
 
             return [
