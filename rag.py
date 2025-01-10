@@ -1,19 +1,24 @@
 import os
+from typing import Any, Dict, List, Optional
 
-from typing import List, Optional
-from langchain_postgres import PGVector
-from langchain_openai import OpenAIEmbeddings
+import psycopg2
 from langchain_core.documents import Document
-
+from langchain_openai import OpenAIEmbeddings
+from langchain_postgres import PGVector
 
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "test-v1")
-
 CONNECTION_STRING = os.getenv(
     "CONNECTION_STRING",
     "postgresql+psycopg://bhavan:mysecretpassword@localhost:5433/new-db",
 )
-
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+DB_HOST = os.getenv(
+    "DB_HOST", "/cloudsql/kaya-workloads-dev-397311:us-west1:kaya-dev-pg-d2c4236b"
+)
+DB_NAME = os.getenv("DB_NAME", "kaya-dev")
+DB_USER = os.getenv("DB_USER", "kayadevadmin")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "gtAupasSTbA2uPQj7hyYMBqG")
+DB_PORT = os.getenv("DB_PORT", "5432")
 
 
 class PGVectorStore:
@@ -23,6 +28,7 @@ class PGVectorStore:
         self.embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
         self.store = self.initialize_store()
+        self.connection = self.initialize_db()
 
     def initialize_store(self):
         return PGVector(
@@ -32,25 +38,67 @@ class PGVectorStore:
             use_jsonb=True,
         )
 
+    def initialize_db(self):
+        try:
+            return psycopg2.connect(
+                host=DB_HOST,
+                database=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                port=DB_PORT,
+            )
+        except psycopg2.Error as e:
+            raise ConnectionError(f"Failed to connect to database: {str(e)}")
+
     def add_documents(self, docs: List[Document]):
         # Adding documents to the vector store
         self.store.add_documents(docs, ids=[doc.metadata["id"] for doc in docs])
 
+    def build_filter_query(self, filter_dict: Dict[str, Any]) -> str:
+        if not filter_dict:
+            return ""
+
+        conditions = []
+        for key, value in filter_dict.items():
+            if isinstance(value, (int, float)):
+                conditions.append(f"cmetadata ->> '{key}' = '{value}'")
+            elif isinstance(value, str):
+                conditions.append(f"cmetadata ->> '{key}' = '{value}'")
+            elif isinstance(value, list):
+                values = "','".join(str(v) for v in value)
+                conditions.append(f"cmetadata ->> '{key}' IN ('{values}')")
+
+        return " AND ".join(conditions)
+
     def similarity_search(
-        self,
-        query: str,
-        filter: dict,
-        k: Optional[int] = 10,
+        self, query: str, filter: dict, k: Optional[int] = 10, native: bool = False
     ):
-        # embedding = self.store.embeddings.embed_query(query)
-        # print(
-        #     f"SELECT * FROM langchain_pg_embedding ORDER BY embedding <-> '{embedding}' LIMIT 10;"
-        # )
-        return self.store.similarity_search(
-            query,
-            k,
-            filter,
-        )
+        try:
+            if not native:
+                return self.store.similarity_search(query, k=k, filter=filter)
+
+            embedding = self.embedding_function.embed_query(query)
+            filter_clause = self.build_filter_query(filter)
+
+            query_sql = f"""
+                    SELECT document, cmetadata, embedding
+                    FROM langchain_pg_embedding
+                    WHERE collection_id = %s
+                    {f'AND {filter_clause}' if filter_clause else ''}
+                    ORDER BY embedding <-> %s
+                    LIMIT %s;
+                """
+
+            with self.connection.cursor() as cur:
+                cur.execute(query_sql, (self._collection_id, embedding, k))
+                results = cur.fetchall()
+
+            return [
+                Document(page_content=row[0], metadata=row[1] if row[1] else {})
+                for row in results
+            ]
+        except Exception as e:
+            print(f"Failed to add documents: {str(e)}")
 
     def delete_documents(self):
         pass

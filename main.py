@@ -1,9 +1,11 @@
-from typing import List
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from rag import PGVectorStore
-from mock_data import vehicles, docs
+from typing import List, Optional
+
+from fastapi import FastAPI
 from langchain_core.documents import Document
+from pydantic import BaseModel
+
+from mock_data import docs, vehicles
+from rag import PGVectorStore
 
 app = FastAPI()
 appointments = []
@@ -30,6 +32,7 @@ class AppointmentResponse(BaseModel):
 class VectorSearch(BaseModel):
     query: str
     filter: dict
+    native: Optional[bool] = False
 
 
 class VectorLoad(BaseModel):
@@ -80,9 +83,9 @@ def get_vehicle_details(vehicle_id: str):
 
 
 @app.post("/vector-info")
-def get_vector_info(obj: VectorSearch):
+def get_vector_info(data: VectorSearch):
     retrieved_docs = pg_vector.similarity_search(
-        query=obj.query, filter=obj.filter, k=10
+        query=data.query, filter=data.filter, k=10, native=data.native
     )
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
