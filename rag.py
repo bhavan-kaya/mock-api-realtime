@@ -77,7 +77,7 @@ class PGVectorStore:
             if not native:
                 return self.store.similarity_search(query, k=k, filter=filter)
 
-            embedding = self.embedding_function.embed_query(query)
+            embedding = self.store.embeddings.embed_query(query)
             filter_clause = self.build_filter_query(filter)
 
             query_sql = f"""
@@ -85,14 +85,12 @@ class PGVectorStore:
                     FROM langchain_pg_embedding
                     WHERE collection_id = %s
                     {f'AND {filter_clause}' if filter_clause else ''}
-                    ORDER BY embedding <-> %s
-                    LIMIT %s;
+                    ORDER BY embedding <-> {embedding}
+                    LIMIT {k};
                 """
 
             with self.connection.cursor() as cur:
-                cur.execute(
-                    query_sql, ("a48cfbe5-f71b-4138-af8a-c0b570445b0b", embedding, k)
-                )
+                cur.execute(query_sql, ("a48cfbe5-f71b-4138-af8a-c0b570445b0b"))
                 results = cur.fetchall()
 
             return [
