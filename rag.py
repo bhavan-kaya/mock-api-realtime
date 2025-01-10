@@ -42,6 +42,11 @@ class PGVectorStore:
         filter: dict,
         k: Optional[int] = 10,
     ):
+        embedding = self.store.embeddings.embed_query(query)
+        print("Embedding: ", embedding)
+        print(
+            f"Query: SELECT * FROM items ORDER BY embedding <-> '{embedding}' LIMIT 10;"
+        )
         return self.store.similarity_search(
             query,
             k,
