@@ -85,7 +85,7 @@ class PGVectorStore:
                     FROM langchain_pg_embedding
                     WHERE collection_id = %s
                     {f'AND {filter_clause}' if filter_clause else ''}
-                    ORDER BY embedding <-> {embedding}
+                    ORDER BY embedding <-> '{embedding}'
                     LIMIT {k};
                 """
 
