@@ -81,13 +81,13 @@ class PGVectorStore:
             filter_clause = self.build_filter_query(filter)
 
             query_sql = f"SELECT document, cmetadata, embedding FROM langchain_pg_embedding WHERE collection_id = 'a48cfbe5-f71b-4138-af8a-c0b570445b0b' {f'AND {filter_clause}' if filter_clause else ''} ORDER BY embedding <-> '{embedding}' LIMIT {k};"
-            print("Query SQL: ", query_sql)
+            # print("Query SQL: ", query_sql)
 
             with self.connection.cursor() as cur:
                 cur.execute(query_sql)
                 results = cur.fetchall()
 
-            print(results)
+            # print(results)
             return [
                 Document(page_content=row[0], metadata=row[1] if row[1] else {})
                 for row in results
