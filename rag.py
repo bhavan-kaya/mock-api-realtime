@@ -89,16 +89,19 @@ class PGVectorStore:
                     LIMIT {k};
                 """
 
+            print("Query SQL: ", query_sql)
+
             with self.connection.cursor() as cur:
                 cur.execute(query_sql, ("a48cfbe5-f71b-4138-af8a-c0b570445b0b"))
                 results = cur.fetchall()
 
+            print(results)
             return [
                 Document(page_content=row[0], metadata=row[1] if row[1] else {})
                 for row in results
             ]
         except Exception as e:
-            print(f"Failed to add documents: {str(e)}")
+            print(f"Failed fetch: {str(e)}")
 
     def delete_documents(self):
         pass
