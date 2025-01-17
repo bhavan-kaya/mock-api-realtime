@@ -37,6 +37,7 @@ class VectorSearch(BaseModel):
 
 class VectorLoad(BaseModel):
     docs: List[str]
+    topic: str
 
 
 pg_vector = PGVectorStore()
@@ -108,7 +109,7 @@ def load_vector_info(load: VectorLoad):
             page_content=str(doc),
             metadata={
                 "id": index,
-                "topic": "maintenance",
+                "topic": load.topic,
             },
         )
         for index, doc in enumerate(load.docs)
