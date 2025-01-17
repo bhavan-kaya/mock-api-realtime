@@ -137,6 +137,7 @@ def search(
     transmission: Optional[str] = Query(None),
     drive_type: Optional[str] = Query(None),
     doors: Optional[int] = Query(None),
+    description: Optional[str] = Query(None),
 ):
     return pg_vector.search_vehicle_inventory(
         vin=vin,
@@ -156,6 +157,7 @@ def search(
         transmission=transmission,
         drive_type=drive_type,
         doors=doors,
+        description=description,
     )
 
 

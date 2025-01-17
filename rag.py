@@ -117,6 +117,7 @@ class PGVectorStore:
         transmission: Optional[str] = None,
         drive_type: Optional[str] = None,
         doors: Optional[int] = None,
+        description: Optional[str] = None,
     ):
         try:
             # Start building the query
@@ -175,6 +176,9 @@ class PGVectorStore:
             if doors:
                 query += " AND doors = %(doors)s"
                 params["doors"] = doors
+            if description:
+                query += " AND description ILIKE %(description)s"
+                params["description"] = f"%{description}%"
 
             # Execute the query
             with self.connection.cursor() as cur:
