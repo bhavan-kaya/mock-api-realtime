@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from langchain_core.documents import Document
 from pydantic import BaseModel
 
@@ -115,6 +115,18 @@ def load_vector_info(load: VectorLoad):
     ]
     pg_vector.add_documents(docs)
     return f"Loaded {len(docs)} documents into the vector store."
+
+
+@app.get("/search")
+def search(
+    vin: Optional[str] = Query(None),
+    make: Optional[str] = Query(None),
+    model: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+):
+    return pg_vector.search_vehicle_inventory(
+        vin=vin, make=make, model=model, year=year
+    )
 
 
 # Run the application (if needed for local testing)

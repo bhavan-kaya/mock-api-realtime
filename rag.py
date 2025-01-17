@@ -97,3 +97,40 @@ class PGVectorStore:
 
     def delete_documents(self):
         pass
+
+    def search_vehicle_inventory(
+        self,
+        vin: Optional[str] = None,
+        make: Optional[str] = None,
+        model: Optional[str] = None,
+        year: Optional[int] = None,
+    ):
+        try:
+            query = "SELECT * FROM demo_vehicle_inventory WHERE TRUE"
+            params = {}
+            data = []
+
+            if vin:
+                query += " AND VIN = %(vin)s"
+                params["vin"] = vin
+            if make:
+                query += " AND Make ILIKE %(make)s"
+                params["make"] = f"%{make}%"
+            if model:
+                query += " AND Model ILIKE %(model)s"
+                params["model"] = f"%{model}%"
+            if year:
+                query += " AND Year = %(year)s"
+                params["year"] = year
+
+            with self.connection.cursor() as cur:
+                print("Query: ", query)
+                cur.execute(query)
+                results = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                data = [dict(zip(columns, row)) for row in results]
+
+            return {"data": data}
+
+        except Exception as e:
+            return {"error": str(e)}
