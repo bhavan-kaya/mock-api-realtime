@@ -102,7 +102,7 @@ def load_vector_info():
     return f"Loaded {len(docs)} documents into the vector store."
 
 
-@app.get("/vector-store/load-docs")
+@app.post("/vector-store/load-docs")
 def load_vector_info(load: VectorLoad):
     docs = [
         Document(
