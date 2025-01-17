@@ -33,6 +33,7 @@ class VectorSearch(BaseModel):
     query: str
     filter: dict
     native: Optional[bool] = False
+    k: Optional[int] = 10
 
 
 class VectorLoad(BaseModel):
@@ -86,7 +87,7 @@ def get_vehicle_details(vehicle_id: str):
 @app.post("/vector-info")
 def get_vector_info(data: VectorSearch):
     retrieved_docs = pg_vector.similarity_search(
-        query=data.query, filter=data.filter, k=10, native=data.native
+        query=data.query, filter=data.filter, k=data.k, native=data.native
     )
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
