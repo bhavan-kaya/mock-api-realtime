@@ -121,12 +121,41 @@ def load_vector_info(load: VectorLoad):
 @app.get("/search")
 def search(
     vin: Optional[str] = Query(None),
+    stock_number: Optional[str] = Query(None),
+    vehicle_type: Optional[str] = Query(None),
+    year: Optional[str] = Query(None),
     make: Optional[str] = Query(None),
     model: Optional[str] = Query(None),
-    year: Optional[int] = Query(None),
+    trim: Optional[str] = Query(None),
+    style: Optional[str] = Query(None),
+    exterior_color: Optional[str] = Query(None),
+    interior_color: Optional[str] = Query(None),
+    certified: Optional[bool] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+    fuel_type: Optional[str] = Query(None),
+    transmission: Optional[str] = Query(None),
+    drive_type: Optional[str] = Query(None),
+    doors: Optional[int] = Query(None),
 ):
     return pg_vector.search_vehicle_inventory(
-        vin=vin, make=make, model=model, year=year
+        vin=vin,
+        stock_number=stock_number,
+        vehicle_type=vehicle_type,
+        year=year,
+        make=make,
+        model=model,
+        trim=trim,
+        style=style,
+        exterior_color=exterior_color,
+        interior_color=interior_color,
+        certified=certified,
+        min_price=min_price,
+        max_price=max_price,
+        fuel_type=fuel_type,
+        transmission=transmission,
+        drive_type=drive_type,
+        doors=doors,
     )
 
 

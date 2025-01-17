@@ -101,31 +101,87 @@ class PGVectorStore:
     def search_vehicle_inventory(
         self,
         vin: Optional[str] = None,
+        stock_number: Optional[str] = None,
+        vehicle_type: Optional[str] = None,
+        year: Optional[str] = None,
         make: Optional[str] = None,
         model: Optional[str] = None,
-        year: Optional[int] = None,
+        trim: Optional[str] = None,
+        style: Optional[str] = None,
+        exterior_color: Optional[str] = None,
+        interior_color: Optional[str] = None,
+        certified: Optional[bool] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
+        fuel_type: Optional[str] = None,
+        transmission: Optional[str] = None,
+        drive_type: Optional[str] = None,
+        doors: Optional[int] = None,
     ):
         try:
+            # Start building the query
             query = "SELECT * FROM demo_vehicle_inventory WHERE TRUE"
-            params = {}
-            data = []
+            params: Dict[str, Any] = {}
 
+            # Add filtering conditions based on provided parameters
             if vin:
-                query += " AND VIN = %(vin)s"
+                query += " AND vin = %(vin)s"
                 params["vin"] = vin
+            if stock_number:
+                query += " AND stock_number ILIKE %(stock_number)s"
+                params["stock_number"] = f"%{stock_number}%"
+            if vehicle_type:
+                query += " AND type ILIKE %(vehicle_type)s"
+                params["vehicle_type"] = f"%{vehicle_type}%"
+            if year:
+                query += " AND year = %(year)s"
+                params["year"] = year
             if make:
-                query += " AND Make ILIKE %(make)s"
+                query += " AND make ILIKE %(make)s"
                 params["make"] = f"%{make}%"
             if model:
-                query += " AND Model ILIKE %(model)s"
+                query += " AND model ILIKE %(model)s"
                 params["model"] = f"%{model}%"
-            if year:
-                query += " AND Year = %(year)s"
-                params["year"] = year
+            if trim:
+                query += " AND trim ILIKE %(trim)s"
+                params["trim"] = f"%{trim}%"
+            if style:
+                query += " AND style ILIKE %(style)s"
+                params["style"] = f"%{style}%"
+            if exterior_color:
+                query += " AND exterior_color ILIKE %(exterior_color)s"
+                params["exterior_color"] = f"%{exterior_color}%"
+            if interior_color:
+                query += " AND interior_color ILIKE %(interior_color)s"
+                params["interior_color"] = f"%{interior_color}%"
+            if certified is not None:
+                query += " AND certified = %(certified)s"
+                params["certified"] = certified
+            if min_price:
+                query += " AND selling_price >= %(min_price)s"
+                params["min_price"] = min_price
+            if max_price:
+                query += " AND selling_price <= %(max_price)s"
+                params["max_price"] = max_price
+            if fuel_type:
+                query += " AND fuel_type ILIKE %(fuel_type)s"
+                params["fuel_type"] = f"%{fuel_type}%"
+            if transmission:
+                query += " AND transmission ILIKE %(transmission)s"
+                params["transmission"] = f"%{transmission}%"
+            if drive_type:
+                query += " AND drive_type ILIKE %(drive_type)s"
+                params["drive_type"] = f"%{drive_type}%"
+            if doors:
+                query += " AND doors = %(doors)s"
+                params["doors"] = doors
 
+            # Execute the query
             with self.connection.cursor() as cur:
-                print("Query: ", query)
-                cur.execute(query)
+                print("Query:", query)
+                cur.execute(
+                    query, params
+                )  # Pass params to safely substitute placeholders
                 results = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
                 data = [dict(zip(columns, row)) for row in results]
