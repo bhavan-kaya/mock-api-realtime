@@ -176,9 +176,9 @@ class PGVectorStore:
             if doors:
                 query += " AND doors = %(doors)s"
                 params["doors"] = doors
-            if description:
-                query += " AND description ILIKE %(description)s"
-                params["description"] = f"%{description}%"
+            # if description:
+            #     query += " AND description ILIKE %(description)s"
+            #     params["description"] = f"%{description}%"
 
             # Execute the query
             with self.connection.cursor() as cur:
