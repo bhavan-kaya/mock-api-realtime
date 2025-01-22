@@ -121,7 +121,59 @@ class PGVectorStore:
     ):
         try:
             # Start building the query
-            query = "SELECT * FROM demo_vehicle_inventory WHERE TRUE"
+            query = """
+               SELECT
+    vin,
+    stock_number,
+    type,
+    year,
+    make,
+    model,
+    trim,
+    style,
+    model_number,
+    mileage,
+    exterior_color,
+    exterior_color_code,
+    interior_color,
+    interior_color_code,
+    date_in_stock,
+    certified,
+    msrp,
+    invoice,
+    book_value,
+    selling_price,
+    misc_price1,
+    misc_price2,
+    misc_price3,
+    engine_cylinders,
+    engine_displacement,
+    drive_type,
+    fuel_type,
+    transmission,
+    wheelbase,
+    comment1,
+    comment2,
+    comment3,
+    comment4,
+    comment5,
+    body,
+    doors,
+    description,
+    options,
+    images_modified,
+    date_images_modified,
+    misc_price4,
+    misc_price5,
+    comment6,
+    comment7,
+    kbb_retail,
+    kbb_valuation_date,
+    kbb_zip_code,
+    added_equipment_pricing,
+    dealer_processing_fee
+FROM demo_vehicle_inventory
+WHERE TRUE"""
             params: Dict[str, Any] = {}
 
             # Add filtering conditions based on provided parameters
