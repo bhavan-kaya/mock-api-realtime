@@ -124,7 +124,7 @@ def search(
     vin: Optional[str] = Query(None),
     stock_number: Optional[str] = Query(None),
     vehicle_type: Optional[str] = Query(None),
-    year: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
     make: Optional[str] = Query(None),
     model: Optional[str] = Query(None),
     trim: Optional[str] = Query(None),
@@ -138,6 +138,9 @@ def search(
     transmission: Optional[str] = Query(None),
     drive_type: Optional[str] = Query(None),
     doors: Optional[int] = Query(None),
+    engine_type: Optional[str] = Query(None),
+    features: Optional[str] = Query(None),
+    packages: Optional[str] = Query(None),
     description: Optional[str] = Query(None),
 ):
     return pg_vector.search_vehicle_inventory(
@@ -158,6 +161,9 @@ def search(
         transmission=transmission,
         drive_type=drive_type,
         doors=doors,
+        engine_type=engine_type,
+        features=features,
+        packages=packages,
         description=description,
     )
 

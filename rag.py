@@ -103,7 +103,7 @@ class PGVectorStore:
         vin: Optional[str] = None,
         stock_number: Optional[str] = None,
         vehicle_type: Optional[str] = None,
-        year: Optional[str] = None,
+        year: Optional[int] = None,
         make: Optional[str] = None,
         model: Optional[str] = None,
         trim: Optional[str] = None,
@@ -117,66 +117,26 @@ class PGVectorStore:
         transmission: Optional[str] = None,
         drive_type: Optional[str] = None,
         doors: Optional[int] = None,
+        engine_type: Optional[str] = None,
+        features: Optional[str] = None,
+        packages: Optional[str] = None,
         description: Optional[str] = None,
     ):
         try:
             # Start building the query
             query = """
-               SELECT
-    vin,
-    stock_number,
-    type,
-    year,
-    make,
-    model,
-    trim,
-    style,
-    model_number,
-    mileage,
-    exterior_color,
-    exterior_color_code,
-    interior_color,
-    interior_color_code,
-    date_in_stock,
-    certified,
-    msrp,
-    invoice,
-    book_value,
-    selling_price,
-    misc_price1,
-    misc_price2,
-    misc_price3,
-    engine_cylinders,
-    engine_displacement,
-    drive_type,
-    fuel_type,
-    transmission,
-    wheelbase,
-    comment1,
-    comment2,
-    comment3,
-    comment4,
-    comment5,
-    body,
-    doors,
-    description,
-    options,
-    images_modified,
-    date_images_modified,
-    misc_price4,
-    misc_price5,
-    comment6,
-    comment7,
-    kbb_retail,
-    kbb_valuation_date,
-    kbb_zip_code,
-    added_equipment_pricing,
-    dealer_processing_fee
-FROM demo_vehicle_inventory
-WHERE TRUE"""
+                SELECT vin, stock_number, year, make, model, trim, style, 
+                    exterior_color, interior_color, certified, selling_price, 
+                    fuel_type, transmission, drive_type, doors, 
+                    engine_type[1] AS engine_type, 
+                    features[1] AS feature, 
+                    packages[1] AS package 
+                FROM demo_vehicle_inventory 
+                WHERE TRUE
+            """
             params: Dict[str, Any] = {}
 
-            # Add filtering conditions based on provided parameters
+            # Dynamic Filtering Based on User Inputs
             if vin:
                 query += " AND vin = %(vin)s"
                 params["vin"] = vin
@@ -228,13 +188,22 @@ WHERE TRUE"""
             if doors:
                 query += " AND doors = %(doors)s"
                 params["doors"] = doors
+            if engine_type:
+                query += " AND engine_type ILIKE %(engine_type)s"
+                params["engine_type"] = f"%{engine_type}%"
+            if features:
+                query += " AND features ILIKE %(features)s"
+                params["features"] = f"%{features}%"
+            if packages:
+                query += " AND packages ILIKE %(packages)s"
+                params["packages"] = f"%{packages}%"
             # if description:
-            #     query += " AND description ILIKE %(description)s"
-            #     params["description"] = f"%{description}%"
+            #     query += " AND (description ILIKE %(query)s OR options ILIKE %(query)s)"
+            #     params["query"] = f"%{description}%"
 
             # Execute the query
             with self.connection.cursor() as cur:
-                print("Query:", query)
+                print("Query:", query)  # Debugging
                 cur.execute(
                     query, params
                 )  # Pass params to safely substitute placeholders
