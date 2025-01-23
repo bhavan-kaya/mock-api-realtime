@@ -1,24 +1,24 @@
 import os
 from typing import Any, Dict, List, Optional
 
+import spacy
 import psycopg2
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
+from spacy.cli import download
 
-COLLECTION_NAME = os.getenv("COLLECTION_NAME", "test-v1")
-CONNECTION_STRING = os.getenv(
-    "CONNECTION_STRING",
-    "postgresql+psycopg://bhavan:mysecretpassword@localhost:5433/new-db",
+from config import (
+    COLLECTION_NAME,
+    CONNECTION_STRING,
+    EMBEDDING_MODEL,
+    DB_HOST,
+    DB_NAME,
+    DB_USER,
+    DB_PASSWORD,
+    DB_PORT,
+    SPACY_MODEL
 )
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
-DB_HOST = os.getenv(
-    "DB_HOST", "/cloudsql/kaya-workloads-dev-397311:us-west1:kaya-dev-pg-d2c4236b"
-)
-DB_NAME = os.getenv("DB_NAME", "kaya-dev")
-DB_USER = os.getenv("DB_USER", "kayadevadmin")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "gtAupasSTbA2uPQj7hyYMBqG")
-DB_PORT = os.getenv("DB_PORT", "5432")
 
 
 class PGVectorStore:
@@ -77,10 +77,10 @@ class PGVectorStore:
             if not native:
                 return self.store.similarity_search(query, k=k, filter=filter)
 
-            embedding = self.store.embeddings.embed_query(query)
+            embedding = self.embedding_function.embed_query(query)
             filter_clause = self.build_filter_query(filter)
 
-            query_sql = f"SELECT document, cmetadata, embedding FROM langchain_pg_embedding WHERE collection_id = 'a48cfbe5-f71b-4138-af8a-c0b570445b0b' {f'AND {filter_clause}' if filter_clause else ''} ORDER BY embedding <-> '{embedding}' LIMIT {k};"
+            query_sql = f"SELECT document, cmetadata, embedding FROM langchain_pg_embedding WHERE collection_id = '408544a1-1dce-4a35-bdc4-15623fc1c6ad' {f'AND {filter_clause}' if filter_clause else ''} ORDER BY embedding <-> '{embedding}' LIMIT {k};"
             # print("Query SQL: ", query_sql)
 
             with self.connection.cursor() as cur:
@@ -94,6 +94,45 @@ class PGVectorStore:
             ]
         except Exception as e:
             print(f"Failed fetch: {str(e)}")
+
+    def hybrid_search(
+        self, query: str, filter: dict, k: Optional[int] = 10, weight: float = 0.5, use_entities: bool = False
+    ):
+        try:
+            if not (0 <= weight <= 1):
+                raise ValueError("Weight must be between 0 and 1.")
+
+            if use_entities:
+                entities = self.extract_entities(query)
+                print("Extracted Entities: ", entities)
+                query = " ".join(entities.values())
+
+            embedding = self.embedding_function.embed_query(query)
+            filter_clause = self.build_filter_query(filter)
+
+
+            sql = f"""
+                SELECT document, cmetadata, 
+                       (ts_rank_cd(to_tsvector('english', document), plainto_tsquery('english', %s)) * {1 - weight}) +
+                       ((1 - (embedding <-> %s::vector)) * {weight}) AS hybrid_score
+                FROM langchain_pg_embedding
+                WHERE collection_id = '408544a1-1dce-4a35-bdc4-15623fc1c6ad'
+                {f'AND {filter_clause}' if filter_clause else ''}
+                ORDER BY hybrid_score DESC
+                LIMIT {k};
+            """
+
+            print("Text for hybrid search: ", query)
+            with self.connection.cursor() as cur:
+                cur.execute(sql, (query, embedding))
+                results = cur.fetchall()
+
+            return [
+                Document(page_content=row[0], metadata=row[1] if row[1] else {})
+                for row in results
+            ]
+        except Exception as e:
+            print(f"Failed hybrid search: {str(e)}")
 
     def delete_documents(self):
         pass
@@ -194,3 +233,14 @@ class PGVectorStore:
 
         except Exception as e:
             return {"error": str(e)}
+
+    def extract_entities(self, query: str):
+        try:
+            nlp = spacy.load(SPACY_MODEL)
+        except OSError:
+            print(f"Model '{SPACY_MODEL}' not found. Downloading...")
+            download(SPACY_MODEL)
+            nlp = spacy.load(SPACY_MODEL)
+        doc = nlp(query)
+        entities = {ent.label_: ent.text for ent in doc.ents}
+        return entities

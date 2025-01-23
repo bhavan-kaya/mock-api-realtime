@@ -1,6 +1,9 @@
+cohere==5.13.11
 fastapi==0.111.1
 pydantic==2.10.4
+spacy==3.8.4
 uvicorn==0.22.0
+langchain-community==0.3.15
 langchain_openai
 langchain_postgres
 psycopg2
