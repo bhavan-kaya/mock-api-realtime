@@ -1,4 +1,3 @@
-import os
 from typing import Any, Dict, List, Optional
 
 import spacy
@@ -17,11 +16,12 @@ from config import (
     DB_USER,
     DB_PASSWORD,
     DB_PORT,
-    SPACY_MODEL
+    SPACY_MODEL, COLLECTION_ID
 )
+from singleton import SingletonMeta
 
 
-class PGVectorStore:
+class PGVectorStore(metaclass=SingletonMeta):
     def __init__(self):
         self.collection_name = COLLECTION_NAME
         self.connection_string = CONNECTION_STRING
@@ -80,20 +80,26 @@ class PGVectorStore:
             embedding = self.embedding_function.embed_query(query)
             filter_clause = self.build_filter_query(filter)
 
-            query_sql = f"SELECT document, cmetadata, embedding FROM langchain_pg_embedding WHERE collection_id = '408544a1-1dce-4a35-bdc4-15623fc1c6ad' {f'AND {filter_clause}' if filter_clause else ''} ORDER BY embedding <-> '{embedding}' LIMIT {k};"
-            # print("Query SQL: ", query_sql)
+            query_sql = f"""
+                SELECT document, cmetadata, embedding 
+                FROM langchain_pg_embedding 
+                WHERE collection_id = %s
+                {f'AND {filter_clause}' if filter_clause else ''} 
+                ORDER BY embedding <-> %s::vector 
+                LIMIT {k};
+            """
 
             with self.connection.cursor() as cur:
-                cur.execute(query_sql)
+                cur.execute(query_sql, (COLLECTION_ID, embedding))
                 results = cur.fetchall()
 
-            # print(results)
             return [
                 Document(page_content=row[0], metadata=row[1] if row[1] else {})
                 for row in results
             ]
         except Exception as e:
             print(f"Failed fetch: {str(e)}")
+
 
     def hybrid_search(
         self, query: str, filter: dict, k: Optional[int] = 10, weight: float = 0.5, use_entities: bool = False
@@ -110,13 +116,12 @@ class PGVectorStore:
             embedding = self.embedding_function.embed_query(query)
             filter_clause = self.build_filter_query(filter)
 
-
             sql = f"""
                 SELECT document, cmetadata, 
                        (ts_rank_cd(to_tsvector('english', document), plainto_tsquery('english', %s)) * {1 - weight}) +
                        ((1 - (embedding <-> %s::vector)) * {weight}) AS hybrid_score
                 FROM langchain_pg_embedding
-                WHERE collection_id = '408544a1-1dce-4a35-bdc4-15623fc1c6ad'
+                WHERE collection_id = %s
                 {f'AND {filter_clause}' if filter_clause else ''}
                 ORDER BY hybrid_score DESC
                 LIMIT {k};
@@ -124,7 +129,7 @@ class PGVectorStore:
 
             print("Text for hybrid search: ", query)
             with self.connection.cursor() as cur:
-                cur.execute(sql, (query, embedding))
+                cur.execute(sql, (query, embedding, COLLECTION_ID))
                 results = cur.fetchall()
 
             return [
@@ -133,6 +138,7 @@ class PGVectorStore:
             ]
         except Exception as e:
             print(f"Failed hybrid search: {str(e)}")
+
 
     def delete_documents(self):
         pass
