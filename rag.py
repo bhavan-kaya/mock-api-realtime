@@ -40,6 +40,7 @@ class PGVectorStore(metaclass=SingletonMeta):
 
     def initialize_db(self):
         try:
+            print(f"Database: {DB_NAME}, Host: {DB_HOST}, Port: {DB_PORT}m User: {DB_USER}")
             return psycopg2.connect(
                 host=DB_HOST,
                 database=DB_NAME,
