@@ -7,3 +7,4 @@ langchain-community==0.3.15
 langchain_openai
 langchain_postgres
 psycopg2
+rerankers[all]==0.1.2
