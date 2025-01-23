@@ -1,9 +1,17 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, Query
+from langchain.retrievers.document_compressors import CohereRerank
+from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
+from itertools import islice
 
+from rerankers import Reranker
+
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE, COHERE_API_KEY
 from mock_data import docs, vehicles
 from rag import PGVectorStore
 
@@ -29,9 +37,17 @@ class AppointmentResponse(BaseModel):
     service: str
 
 
+class HybridSearchOptions(BaseModel):
+    searchWeight: Optional[float] = 0.5
+    useEntities: Optional[bool] = False
+
+
 class VectorSearch(BaseModel):
     query: str
-    filter: dict
+    filter: dict = {}
+    doRerank: Optional[bool] = False
+    doHybridSearch: Optional[bool] = False
+    hybridSearchOptions: Optional[HybridSearchOptions] = None
     native: Optional[bool] = False
     k: Optional[int] = 10
 
@@ -86,15 +102,47 @@ def get_vehicle_details(vehicle_id: str):
 
 @app.post("/vector-info")
 def get_vector_info(data: VectorSearch):
-    retrieved_docs = pg_vector.similarity_search(
-        query=data.query, filter=data.filter, k=data.k, native=data.native
+    llm = ChatOpenAI(model_name="gpt-4o")
+    prompt = PromptTemplate(
+        template=RAG_TEMPLATE, input_variables=["query", "information"]
     )
+    chain = prompt | llm
+
+    if data.doHybridSearch:
+        retrieved_docs = pg_vector.hybrid_search(
+            data.query,
+            data.filter,
+            data.k,
+            data.hybridSearchOptions.searchWeight,
+            data.hybridSearchOptions.useEntities,
+        )
+    else:
+        retrieved_docs = pg_vector.similarity_search(
+            query=data.query, filter=data.filter, k=data.k, native=data.native
+        )
+
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
-    if not retrieved_texts:
-        return f"No relevant information found in the knowledge base."
+    if data.doRerank:
+        ranker = Reranker(
+            "cohere",
+            lang="en",
+            model_type="rerank-english-v3.0",
+            api_key=COHERE_API_KEY,
+        )
+        ranked_docs = ranker.rank(query=data.query, docs=retrieved_texts)
+        retrieved_texts = [
+            ranked_doc.document.text for ranked_doc in ranked_docs.results
+        ]
 
-    return f"Information from knowledge base:\n" + "\n".join(retrieved_texts)
+    information = "\n".join(retrieved_texts)
+
+    print("Query: ", data.query)
+    print("\n\nRetrieved texts: ", information)
+
+    response = chain.invoke({"query": data.query, "information": information})
+
+    return response
 
 
 @app.get("/vector-store/load")
@@ -104,18 +152,36 @@ def load_vector_info():
 
 
 @app.post("/vector-store/load-docs")
-def load_vector_info(load: VectorLoad):
-    docs = [
-        Document(
-            page_content=str(doc),
-            metadata={
-                "id": index,
-                "topic": load.topic,
-            },
+def load_vector_info():
+    loader = CSVLoader(file_path="data/vehicle_inventory_data.csv")
+    docs = loader.load()
+    llm = ChatOpenAI(model_name="gpt-4o")
+    prompt = PromptTemplate.from_template(template=INGESTION_TEMPLATE)
+    chain = prompt | llm
+    documents = []
+
+    def batch(iterable, n=1):
+        iterable = iter(iterable)
+        while True:
+            batch_items = list(islice(iterable, n))
+            if not batch_items:
+                break
+            yield batch_items
+
+    for idx, doc in enumerate(docs):
+        response = chain.invoke({"information": doc.page_content})
+        processed_doc = Document(
+            page_content=str(response.content),
+            metadata={"id": idx},
         )
-        for index, doc in enumerate(load.docs)
-    ]
-    pg_vector.add_documents(docs)
+        documents.append(processed_doc)
+        print("Document loaded: ", idx)
+
+        if len(documents) % 10 == 0 or idx == len(docs) - 1:
+            pg_vector.add_documents(documents)
+            print(f"Added {len(documents)} documents to vector store.")
+            documents.clear()
+
     return f"Loaded {len(docs)} documents into the vector store."
 
 
