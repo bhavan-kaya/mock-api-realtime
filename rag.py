@@ -125,13 +125,25 @@ class PGVectorStore:
         try:
             # Start building the query
             query = """
-                SELECT vin, stock_number, year, make, model, trim, style, 
-                    exterior_color, interior_color, certified, selling_price, 
-                    fuel_type, transmission, drive_type, doors, 
-                    engine_type[1] AS engine_type, 
-                    features[1] AS feature, 
-                    packages[1] AS package 
-                FROM demo_vehicle_inventory 
+                SELECT vin,
+                    stock_number,
+                    year,
+                    make,
+                    model,
+                    trim,
+                    style,
+                    exterior_color,
+                    interior_color,
+                    certified,
+                    selling_price,
+                    fuel_type,
+                    transmission,
+                    drive_type,
+                    doors,
+                    engine_type,
+                    features,
+                    packages
+                FROM demo_vehicle_inventory
                 WHERE TRUE
             """
             params: Dict[str, Any] = {}
