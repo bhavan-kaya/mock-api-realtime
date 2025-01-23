@@ -152,9 +152,15 @@ def load_vector_info():
 
 
 @app.post("/vector-store/load-docs")
-def load_vector_info():
+def load_vector_info(
+    start: Optional[int] = Query(0, description="Start index for slicing the documents"),
+    end: Optional[int] = Query(None, description="End index for slicing the documents"),
+):
     loader = CSVLoader(file_path="data/vehicle_inventory_data.csv")
     docs = loader.load()
+
+    docs = docs[start:end] if end is not None else docs[start:]
+
     llm = ChatOpenAI(model_name="gpt-4o")
     prompt = PromptTemplate.from_template(template=INGESTION_TEMPLATE)
     chain = prompt | llm
@@ -172,17 +178,17 @@ def load_vector_info():
         response = chain.invoke({"information": doc.page_content})
         processed_doc = Document(
             page_content=str(response.content),
-            metadata={"id": idx},
+            metadata={"id": start + idx},
         )
         documents.append(processed_doc)
-        print("Document loaded: ", idx)
+        print("Document loaded: ", start + idx)
 
         if len(documents) % 10 == 0 or idx == len(docs) - 1:
             pg_vector.add_documents(documents)
             print(f"Added {len(documents)} documents to vector store.")
             documents.clear()
 
-    return f"Loaded {len(docs)} documents into the vector store."
+    return f"Loaded {len(docs)} documents into the vector store, from index {start} to {end or 'end'}."
 
 
 @app.get("/search")
