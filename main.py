@@ -11,9 +11,10 @@ from itertools import islice
 
 from rerankers import Reranker
 
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE, COHERE_API_KEY
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, COHERE_API_KEY
 from mock_data import docs, vehicles
 from rag import PGVectorStore
+from util import Utils
 
 app = FastAPI()
 appointments = []
@@ -104,7 +105,7 @@ def get_vehicle_details(vehicle_id: str):
 def get_vector_info(data: VectorSearch):
     llm = ChatOpenAI(model_name="gpt-4o")
     prompt = PromptTemplate(
-        template=RAG_TEMPLATE, input_variables=["query", "information"]
+        template=RAG_TEMPLATE_THREE, input_variables=["query", "information"]
     )
     chain = prompt | llm
 
@@ -124,16 +125,7 @@ def get_vector_info(data: VectorSearch):
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
     if data.doRerank:
-        ranker = Reranker(
-            "cohere",
-            lang="en",
-            model_type="rerank-english-v3.0",
-            api_key=COHERE_API_KEY,
-        )
-        ranked_docs = ranker.rank(query=data.query, docs=retrieved_texts)
-        retrieved_texts = [
-            ranked_doc.document.text for ranked_doc in ranked_docs.results
-        ]
+        retrieved_texts = Utils.get_ranked_documents(data.query, retrieved_texts)
 
     information = "\n".join(retrieved_texts)
 
