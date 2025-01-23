@@ -18,4 +18,4 @@ class Utils:
             api_key=COHERE_API_KEY,
         )
         ranked_docs = ranker.rank(query=query, docs=retrieved_texts)
-        return ranked_docs
+        return ranked_docs.results

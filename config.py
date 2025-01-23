@@ -163,7 +163,7 @@ For your use:
 Human Query: {query}
 Context: {information}"""
 
-RAG_TEMPLATE_THREE = """You are a call agent for Sonic Automobile. Using the retrieved context, answer customer queries accurately and concisely. If information is missing, acknowledge it and offer alternatives.
+RAG_TEMPLATE_THREE = """You are a call agent for Sonic Automobile. Using the below car profiles, answer customer queries accurately and concisely. If information is missing, acknowledge it and offer alternatives.
 
 Example 1:
 Query: "Does BMW offer ventilated seats and 3D parking assistance?"
@@ -195,3 +195,5 @@ INGESTION_TEMPLATE = os.getenv("INGESTION_TEMPLATE", INGESTION_TEMPLATE_ONE)
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
 COLLECTION_ID = os.getenv("COLLECTION_ID", 'ee5c4a77-aaa9-4933-b93b-70fc3df4d3a2')
+APP_DEBUG = os.getenv("APP_DEBUG", True)
+VERBOSE = os.getenv("VERBOSE", True)
