@@ -47,6 +47,7 @@ class VectorSearch(BaseModel):
     doHybridSearch: Optional[bool] = False
     hybridSearchOptions: Optional[HybridSearchOptions] = None
     native: Optional[bool] = False
+    contentOnly: Optional[bool] = False
     k: Optional[int] = 10
 
 
@@ -127,12 +128,15 @@ def get_vector_info(data: VectorSearch):
 
     information = "\n\n Car Profile:".join([f"{idx} {text}" for idx, text in enumerate(retrieved_texts)])
 
+    if data.contentOnly:
+        return information
+
     print("Query: ", data.query)
     print("\n\nRetrieved indices: ", ", ".join([str(idx) for idx, _ in enumerate(retrieved_texts)]))
 
     response = chain.invoke({"query": data.query, "information": information})
 
-    return response
+    return response.content
 
 
 @app.get("/vector-store/load")
