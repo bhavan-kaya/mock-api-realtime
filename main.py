@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from itertools import islice
 
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
 from mock_data import docs, vehicles
 from rag import PGVectorStore
 from util import Utils
@@ -217,6 +217,7 @@ def search(
     description: Optional[str] = Query(None),
     fields: Optional[str] = Query(None),
     options: Optional[str] = Query(None),
+    context_limit: Optional[int] = Query(REALTIME_MAX_TOKENS),
 ):
     return pg_vector.search_vehicle_inventory(
         vin=vin,
@@ -242,6 +243,7 @@ def search(
         description=description,
         fields=fields,
         options=options,
+        context_limit=context_limit,
     )
 
 

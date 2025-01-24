@@ -182,11 +182,39 @@ class PGVectorStore(metaclass=SingletonMeta):
         fields: Optional[str] = None,
         description: Optional[str] = None,
         options: Optional[str] = None,
-        context_limit: int = REALTIME_MAX_TOKENS,
+        context_limit: int = None,
     ):
         try:
             columns = [field.strip() for field in fields.split(",")] if fields else []
-            print("Columns to return: ", columns)
+            default_columns = [
+                "vin",
+                "stock_number",
+                "type",
+                "year",
+                "make",
+                "model",
+                "trim",
+                "style",
+                "model_number",
+                "mileage",
+                "exterior_color",
+                "interior_color",
+                "msrp",
+                "selling_price",
+                "drive_type",
+                "fuel_type",
+                "transmission",
+                "wheelbase",
+                "body",
+                "doors",
+                "vehicle_status",
+                "city_fuel_economy",
+                "highway_fuel_economy",
+                "features",
+                "packages",
+            ]
+            all_columns = default_columns + columns
+            print("Columns to return: ", all_columns)
 
             # Start building the query with token count estimation
             query = """
@@ -390,6 +418,9 @@ class PGVectorStore(metaclass=SingletonMeta):
                 results = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
                 data = [dict(zip(columns, row)) for row in results]
+
+            # Filter the columns to return
+            data = [{k: v for k, v in d.items() if k in all_columns} for d in data]
 
             return {"data": data}
 
