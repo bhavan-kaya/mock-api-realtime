@@ -18,6 +18,7 @@ from config import (
     DB_PORT,
     SPACY_MODEL,
     COLLECTION_ID,
+    REALTIME_MAX_TOKENS,
 )
 from singleton import SingletonMeta
 
@@ -178,10 +179,15 @@ class PGVectorStore(metaclass=SingletonMeta):
         engine_type: Optional[str] = None,
         features: Optional[str] = None,
         packages: Optional[str] = None,
+        fields: Optional[str] = None,
         description: Optional[str] = None,
-        context_limit: int = 120000,  # Token limit
+        options: Optional[str] = None,
+        context_limit: int = REALTIME_MAX_TOKENS,
     ):
         try:
+            columns = [field.strip() for field in fields.split(",")] if fields else []
+            print("Columns to return: ", columns)
+
             # Start building the query with token count estimation
             query = """
                 WITH filtered AS (
@@ -316,9 +322,6 @@ class PGVectorStore(metaclass=SingletonMeta):
             if packages:
                 query += " AND packages ILIKE %(packages)s"
                 params["packages"] = f"%{packages}%"
-            # if description:
-            #     query += " AND description ILIKE %(description)s"
-            #     params["description"] = f"%{description}%"
 
             query += """
                 )
