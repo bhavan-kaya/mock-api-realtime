@@ -106,6 +106,12 @@ class PGVectorStore(metaclass=SingletonMeta):
         self, query: str, filter: dict, k: Optional[int] = 10, weight: float = 0.5, use_entities: bool = False
     ):
         try:
+            print("Collection ID for current search: ", COLLECTION_ID)
+            print("Collection Name for current search: ", COLLECTION_NAME)
+            print("Database Name:", DB_NAME)
+            print("Query for hybrid search: ", query)
+            print("Filter for hybrid search: ", filter)
+            print("Weight for hybrid search: ", weight)
             if not (0 <= weight <= 1):
                 raise ValueError("Weight must be between 0 and 1.")
 

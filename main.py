@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, Query
-import langchain
 from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
@@ -9,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from itertools import islice
 
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, APP_DEBUG, VERBOSE
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE
 from mock_data import docs, vehicles
 from rag import PGVectorStore
 from util import Utils
@@ -101,8 +100,6 @@ def get_vehicle_details(vehicle_id: str):
 
 @app.post("/vector-info")
 def get_vector_info(data: VectorSearch):
-    langchain.debug = APP_DEBUG
-    langchain.verbose = VERBOSE
     llm = ChatOpenAI(model_name="gpt-4o")
     prompt = PromptTemplate(
         template=RAG_TEMPLATE_THREE, input_variables=["query", "information"]
@@ -131,7 +128,7 @@ def get_vector_info(data: VectorSearch):
     information = "\n\n Car Profile:".join([f"{idx} {text}" for idx, text in enumerate(retrieved_texts)])
 
     print("Query: ", data.query)
-    print("\n\nRetrieved texts: ", information)
+    print("\n\nRetrieved indices: ", ", ".join([str(idx) for idx, _ in enumerate(retrieved_texts)]))
 
     response = chain.invoke({"query": data.query, "information": information})
 
