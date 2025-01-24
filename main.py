@@ -9,6 +9,9 @@ from pydantic import BaseModel
 from itertools import islice
 
 from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE
+from faiss_store import Faiss
+from faiss_data import FAISS_DOCUMENTS
 from mock_data import docs, vehicles
 from rag import PGVectorStore
 from util import Utils
@@ -49,6 +52,7 @@ class VectorSearch(BaseModel):
     native: Optional[bool] = False
     contentOnly: Optional[bool] = False
     k: Optional[int] = 10
+    db: Optional[str] = "pg"
 
 
 class VectorLoad(BaseModel):
@@ -57,7 +61,8 @@ class VectorLoad(BaseModel):
 
 
 pg_vector = PGVectorStore()
-
+faiss = Faiss()
+faiss.add(documents=FAISS_DOCUMENTS)
 
 @app.post("/book-appointment", response_model=AppointmentResponse)
 def book_appointment(request: AppointmentRequest):
@@ -107,18 +112,23 @@ def get_vector_info(data: VectorSearch):
     )
     chain = prompt | llm
 
-    if data.doHybridSearch:
-        retrieved_docs = pg_vector.hybrid_search(
-            data.query,
-            data.filter,
-            data.k,
-            data.hybridSearchOptions.searchWeight,
-            data.hybridSearchOptions.useEntities,
+    if data.db == "faiss":
+        retrieved_docs = faiss.search(
+            query=data.query, k=data.k
         )
     else:
-        retrieved_docs = pg_vector.similarity_search(
-            query=data.query, filter=data.filter, k=data.k, native=data.native
-        )
+        if data.doHybridSearch:
+            retrieved_docs = pg_vector.hybrid_search(
+                data.query,
+                data.filter,
+                data.k,
+                data.hybridSearchOptions.searchWeight,
+                data.hybridSearchOptions.useEntities,
+            )
+        else:
+            retrieved_docs = pg_vector.similarity_search(
+                query=data.query, filter=data.filter, k=data.k, native=data.native
+            )
 
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
