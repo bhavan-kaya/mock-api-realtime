@@ -126,13 +126,18 @@ def get_vector_info(data: VectorSearch):
         ranked_docs = Utils.get_ranked_documents(data.query, retrieved_texts)
         retrieved_texts = [rank_doc.text for rank_doc in ranked_docs]
 
-    information = "\n\n Car Profile:".join([f"{idx} {text}" for idx, text in enumerate(retrieved_texts)])
+    information = "\n\n Car Profile:".join(
+        [f"{idx} {text}" for idx, text in enumerate(retrieved_texts)]
+    )
 
     if data.contentOnly:
         return information
 
     print("Query: ", data.query)
-    print("\n\nRetrieved indices: ", ", ".join([str(idx) for idx, _ in enumerate(retrieved_texts)]))
+    print(
+        "\n\nRetrieved indices: ",
+        ", ".join([str(idx) for idx, _ in enumerate(retrieved_texts)]),
+    )
 
     response = chain.invoke({"query": data.query, "information": information})
 
@@ -147,7 +152,9 @@ def load_vector_info():
 
 @app.post("/vector-store/load-docs")
 def load_vector_info(
-    start: Optional[int] = Query(0, description="Start index for slicing the documents"),
+    start: Optional[int] = Query(
+        0, description="Start index for slicing the documents"
+    ),
     end: Optional[int] = Query(None, description="End index for slicing the documents"),
 ):
     loader = CSVLoader(file_path="data/vehicle_inventory_data.csv")
@@ -208,6 +215,8 @@ def search(
     features: Optional[str] = Query(None),
     packages: Optional[str] = Query(None),
     description: Optional[str] = Query(None),
+    fields: Optional[str] = Query(None),
+    options: Optional[str] = Query(None),
 ):
     return pg_vector.search_vehicle_inventory(
         vin=vin,
@@ -231,6 +240,8 @@ def search(
         features=features,
         packages=packages,
         description=description,
+        fields=fields,
+        options=options,
     )
 
 

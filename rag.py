@@ -16,7 +16,9 @@ from config import (
     DB_USER,
     DB_PASSWORD,
     DB_PORT,
-    SPACY_MODEL, COLLECTION_ID
+    SPACY_MODEL,
+    COLLECTION_ID,
+    REALTIME_MAX_TOKENS,
 )
 from singleton import SingletonMeta
 
@@ -40,7 +42,9 @@ class PGVectorStore(metaclass=SingletonMeta):
 
     def initialize_db(self):
         try:
-            print(f"Database: {DB_NAME}, Host: {DB_HOST}, Port: {DB_PORT}m User: {DB_USER}")
+            print(
+                f"Database: {DB_NAME}, Host: {DB_HOST}, Port: {DB_PORT}m User: {DB_USER}"
+            )
             return psycopg2.connect(
                 host=DB_HOST,
                 database=DB_NAME,
@@ -101,9 +105,13 @@ class PGVectorStore(metaclass=SingletonMeta):
         except Exception as e:
             print(f"Failed fetch: {str(e)}")
 
-
     def hybrid_search(
-        self, query: str, filter: dict, k: Optional[int] = 10, weight: float = 0.5, use_entities: bool = False
+        self,
+        query: str,
+        filter: dict,
+        k: Optional[int] = 10,
+        weight: float = 0.5,
+        use_entities: bool = False,
     ):
         try:
             print("Collection ID for current search: ", COLLECTION_ID)
@@ -146,7 +154,6 @@ class PGVectorStore(metaclass=SingletonMeta):
         except Exception as e:
             print(f"Failed hybrid search: {str(e)}")
 
-
     def delete_documents(self):
         pass
 
@@ -172,65 +179,86 @@ class PGVectorStore(metaclass=SingletonMeta):
         engine_type: Optional[str] = None,
         features: Optional[str] = None,
         packages: Optional[str] = None,
+        fields: Optional[str] = None,
         description: Optional[str] = None,
+        options: Optional[str] = None,
+        context_limit: int = REALTIME_MAX_TOKENS,
     ):
         try:
-            # Start building the query
+            columns = [field.strip() for field in fields.split(",")] if fields else []
+            print("Columns to return: ", columns)
+
+            # Start building the query with token count estimation
             query = """
-                SELECT vin,
-                    stock_number,
-                    type,
-                    year,
-                    make,
-                    model,
-                    trim,
-                    style,
-                    model_number,
-                    mileage,
-                    exterior_color,
-                    exterior_color_code,
-                    interior_color,
-                    interior_color_code,
-                    date_in_stock,
-                    certified,
-                    msrp,
-                    invoice,
-                    book_value,
-                    selling_price,
-                    engine_cylinders,
-                    engine_displacement,
-                    drive_type,
-                    fuel_type,
-                    transmission,
-                    wheelbase,
-                    comment1,
-                    comment2,
-                    comment3,
-                    comment4,
-                    comment5,
-                    comment6,
-                    comment7,
-                    body,
-                    doors,
-                    description,
-                    options,
-                    kbb_retail,
-                    kbb_valuation_date,
-                    kbb_zip_code,
-                    added_equipment_pricing,
-                    dealer_processing_fee,
-                    location,
-                    vehicle_status,
-                    engine_type,
-                    drive_line,
-                    transmission_secondary,
-                    city_fuel_economy,
-                    highway_fuel_economy,
-                    features,
-                    packages
-                FROM demo_vehicle_inventory
-                WHERE TRUE
+                WITH filtered AS (
+                    SELECT
+                        vin,
+                        stock_number,
+                        type,
+                        year,
+                        make,
+                        model,
+                        trim,
+                        style,
+                        model_number,
+                        mileage,
+                        exterior_color,
+                        exterior_color_code,
+                        interior_color,
+                        interior_color_code,
+                        date_in_stock,
+                        certified,
+                        msrp,
+                        invoice,
+                        book_value,
+                        selling_price,
+                        engine_cylinders,
+                        engine_displacement,
+                        drive_type,
+                        fuel_type,
+                        transmission,
+                        wheelbase,
+                        body,
+                        doors,
+                        description,
+                        options,
+                        kbb_retail,
+                        kbb_valuation_date,
+                        kbb_zip_code,
+                        added_equipment_pricing,
+                        dealer_processing_fee,
+                        location,
+                        vehicle_status,
+                        engine_type,
+                        drive_line,
+                        transmission_secondary,
+                        city_fuel_economy,
+                        highway_fuel_economy,
+                        features,
+                        packages,
+                        (
+                            COALESCE(LENGTH(vin), 0) +
+                            COALESCE(LENGTH(stock_number), 0) +
+                            COALESCE(LENGTH(type), 0) +
+                            COALESCE(LENGTH(make), 0) +
+                            COALESCE(LENGTH(model), 0) +
+                            COALESCE(LENGTH(trim), 0) +
+                            COALESCE(LENGTH(style), 0) +
+                            COALESCE(LENGTH(exterior_color), 0) +
+                            COALESCE(LENGTH(interior_color), 0) +
+                            COALESCE(LENGTH(fuel_type), 0) +
+                            COALESCE(LENGTH(transmission), 0) +
+                            COALESCE(LENGTH(drive_type), 0) +
+                            COALESCE(LENGTH(engine_type), 0) +
+                            COALESCE(LENGTH(features), 0) +
+                            COALESCE(LENGTH(packages), 0) +
+                            COALESCE(LENGTH(description), 0) +
+                            COALESCE(LENGTH(options), 0)
+                        ) / 5 AS estimated_token_count
+                    FROM demo_vehicle_inventory
+                    WHERE TRUE
             """
+
             params: Dict[str, Any] = {}
 
             # Dynamic Filtering Based on User Inputs
@@ -294,16 +322,71 @@ class PGVectorStore(metaclass=SingletonMeta):
             if packages:
                 query += " AND packages ILIKE %(packages)s"
                 params["packages"] = f"%{packages}%"
-            # if description:
-            #     query += " AND (description ILIKE %(query)s OR options ILIKE %(query)s)"
-            #     params["query"] = f"%{description}%"
+
+            query += """
+                )
+                , cumulative AS (
+                    SELECT
+                        *,
+                        SUM(estimated_token_count) OVER (ORDER BY date_in_stock ASC) AS cumulative_tokens
+                    FROM filtered
+                )
+                SELECT
+                    vin,
+                    stock_number,
+                    type,
+                    year,
+                    make,
+                    model,
+                    trim,
+                    style,
+                    model_number,
+                    mileage,
+                    exterior_color,
+                    exterior_color_code,
+                    interior_color,
+                    interior_color_code,
+                    date_in_stock,
+                    certified,
+                    msrp,
+                    invoice,
+                    book_value,
+                    selling_price,
+                    engine_cylinders,
+                    engine_displacement,
+                    drive_type,
+                    fuel_type,
+                    transmission,
+                    wheelbase,
+                    body,
+                    doors,
+                    description,
+                    options,
+                    kbb_retail,
+                    kbb_valuation_date,
+                    kbb_zip_code,
+                    added_equipment_pricing,
+                    dealer_processing_fee,
+                    location,
+                    vehicle_status,
+                    engine_type,
+                    drive_line,
+                    transmission_secondary,
+                    city_fuel_economy,
+                    highway_fuel_economy,
+                    features,
+                    packages
+                FROM cumulative
+                WHERE cumulative_tokens <= %(context_limit)s
+                ORDER BY date_in_stock ASC;
+            """
+
+            params["context_limit"] = context_limit
 
             # Execute the query
             with self.connection.cursor() as cur:
-                print("Query:", query)  # Debugging
-                cur.execute(
-                    query, params
-                )  # Pass params to safely substitute placeholders
+                print("Query:", cur.mogrify(query, params))  # Debugging
+                cur.execute(query, params)
                 results = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
                 data = [dict(zip(columns, row)) for row in results]
