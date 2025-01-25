@@ -19,8 +19,8 @@ appointments = []
 
 # Models for request and response payloads
 class AppointmentRequest(BaseModel):
-    customer_id: str
-    vehicle_id: str
+    customer_name: str
+    vehicle_details: str
     date: str
     time: str
     service: str
@@ -65,8 +65,8 @@ def book_appointment(request: AppointmentRequest):
     appointment_id = len(appointments) + 1
     appointment = {
         "appointment_id": appointment_id,
-        "customer_id": request.customer_id,
-        "vehicle_id": request.vehicle_id,
+        "customer_name": request.customer_name,
+        "vehicle_details": request.vehicle_details,
         "date": request.date,
         "time": request.time,
         "service": request.service,
