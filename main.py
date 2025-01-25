@@ -26,15 +26,6 @@ class AppointmentRequest(BaseModel):
     service: str
 
 
-class AppointmentResponse(BaseModel):
-    appointment_id: int
-    customer_id: str
-    vehicle_id: str
-    date: str
-    time: str
-    service: str
-
-
 class HybridSearchOptions(BaseModel):
     searchWeight: Optional[float] = 0.5
     useEntities: Optional[bool] = False
@@ -59,7 +50,7 @@ class VectorLoad(BaseModel):
 pg_vector = PGVectorStore()
 
 
-@app.post("/book-appointment", response_model=AppointmentResponse)
+@app.post("/book-appointment")
 def book_appointment(request: AppointmentRequest):
     # Generate a new appointment ID
     appointment_id = len(appointments) + 1
