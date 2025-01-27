@@ -1,3 +1,5 @@
+import random
+from itertools import islice
 from typing import List, Optional
 
 from fastapi import FastAPI, Query
@@ -6,30 +8,21 @@ from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
-from itertools import islice
 
 from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
+from faiss_data import FAISS_DOCUMENTS
+from faiss_store import Faiss
 from mock_data import docs, vehicles
 from rag import PGVectorStore
 from util import Utils
 
 app = FastAPI()
-appointments = []
 
 
 # Models for request and response payloads
 class AppointmentRequest(BaseModel):
-    customer_id: str
-    vehicle_id: str
-    date: str
-    time: str
-    service: str
-
-
-class AppointmentResponse(BaseModel):
-    appointment_id: int
-    customer_id: str
-    vehicle_id: str
+    customer_name: str
+    vehicle_details: str
     date: str
     time: str
     service: str
@@ -49,6 +42,7 @@ class VectorSearch(BaseModel):
     native: Optional[bool] = False
     contentOnly: Optional[bool] = False
     k: Optional[int] = 10
+    db: Optional[str] = "pg"
 
 
 class VectorLoad(BaseModel):
@@ -57,21 +51,20 @@ class VectorLoad(BaseModel):
 
 
 pg_vector = PGVectorStore()
+faiss = Faiss()
+faiss.add(documents=FAISS_DOCUMENTS)
 
 
-@app.post("/book-appointment", response_model=AppointmentResponse)
+@app.post("/book-appointment")
 def book_appointment(request: AppointmentRequest):
-    # Generate a new appointment ID
-    appointment_id = len(appointments) + 1
     appointment = {
-        "appointment_id": appointment_id,
-        "customer_id": request.customer_id,
-        "vehicle_id": request.vehicle_id,
+        "appointment_id": random.randint(1000, 9999),
+        "customer_name": request.customer_name,
+        "vehicle_details": request.vehicle_details,
         "date": request.date,
         "time": request.time,
         "service": request.service,
     }
-    appointments.append(appointment)
 
     try:
 
@@ -107,18 +100,21 @@ def get_vector_info(data: VectorSearch):
     )
     chain = prompt | llm
 
-    if data.doHybridSearch:
-        retrieved_docs = pg_vector.hybrid_search(
-            data.query,
-            data.filter,
-            data.k,
-            data.hybridSearchOptions.searchWeight,
-            data.hybridSearchOptions.useEntities,
-        )
+    if data.db == "faiss":
+        retrieved_docs = faiss.search(query=data.query, k=data.k)
     else:
-        retrieved_docs = pg_vector.similarity_search(
-            query=data.query, filter=data.filter, k=data.k, native=data.native
-        )
+        if data.doHybridSearch:
+            retrieved_docs = pg_vector.hybrid_search(
+                data.query,
+                data.filter,
+                data.k,
+                data.hybridSearchOptions.searchWeight,
+                data.hybridSearchOptions.useEntities,
+            )
+        else:
+            retrieved_docs = pg_vector.similarity_search(
+                query=data.query, filter=data.filter, k=data.k, native=data.native
+            )
 
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
