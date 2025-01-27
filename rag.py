@@ -164,8 +164,8 @@ class PGVectorStore(metaclass=SingletonMeta):
         vehicle_type: Optional[str] = None,
         year: Optional[int] = None,
         make: Optional[str] = None,
-        model: Optional[List[str]] = None,
-        trim: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        trim: Optional[str] = None,
         style: Optional[str] = None,
         exterior_color: Optional[str] = None,
         interior_color: Optional[str] = None,
@@ -186,6 +186,8 @@ class PGVectorStore(metaclass=SingletonMeta):
     ):
         try:
             columns = [field.strip() for field in fields.split(",")] if fields else []
+            models = [model.strip() for model in model.split(",")] if model else []
+            trims = [trim.strip() for trim in trim.split(",")] if trim else []
             default_columns = [
                 "vin",
                 "stock_number",
@@ -307,12 +309,12 @@ class PGVectorStore(metaclass=SingletonMeta):
             if make:
                 query += " AND make ILIKE %(make)s"
                 params["make"] = f"%{make}%"
-            if model:
+            if models:
                 query += " AND model = ANY (%(model)s)"
-                params["model"] = model
-            if trim:
+                params["model"] = models
+            if trims:
                 query += " AND trim = ANY (%(trim)s)"
-                params["trim"] = trim
+                params["trim"] = trims
             if style:
                 query += " AND style ILIKE %(style)s"
                 params["style"] = f"%{style}%"
