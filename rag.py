@@ -164,8 +164,8 @@ class PGVectorStore(metaclass=SingletonMeta):
         vehicle_type: Optional[str] = None,
         year: Optional[int] = None,
         make: Optional[str] = None,
-        model: Optional[str] = None,
-        trim: Optional[str] = None,
+        model: Optional[List[str]] = None,
+        trim: Optional[List[str]] = None,
         style: Optional[str] = None,
         exterior_color: Optional[str] = None,
         interior_color: Optional[str] = None,
@@ -215,6 +215,8 @@ class PGVectorStore(metaclass=SingletonMeta):
             ]
             all_columns = default_columns + columns
             print("Columns to return: ", all_columns)
+            print("Models to search: ", model)
+            print("Trims to search: ", trim)
 
             # Start building the query with token count estimation
             query = """
@@ -306,11 +308,11 @@ class PGVectorStore(metaclass=SingletonMeta):
                 query += " AND make ILIKE %(make)s"
                 params["make"] = f"%{make}%"
             if model:
-                query += " AND model ILIKE %(model)s"
-                params["model"] = f"%{model}%"
+                query += " AND model = ANY (%(model)s)"
+                params["model"] = model
             if trim:
-                query += " AND trim ILIKE %(trim)s"
-                params["trim"] = f"%{trim}%"
+                query += " AND trim = ANY (%(trim)s)"
+                params["trim"] = trim
             if style:
                 query += " AND style ILIKE %(style)s"
                 params["style"] = f"%{style}%"
