@@ -1,4 +1,5 @@
 import random
+from datetime import datetime
 from itertools import islice
 from typing import List, Optional
 
@@ -26,6 +27,11 @@ class AppointmentRequest(BaseModel):
     date: str
     time: str
     service: str
+
+class ContactPersistenceRequest(BaseModel):
+    customer_name: str
+    phone_number: str
+    service_supplier: str
 
 
 class HybridSearchOptions(BaseModel):
@@ -74,6 +80,32 @@ def book_appointment(request: AppointmentRequest):
                 metadata={
                     "id": 1,
                     "topic": "maintenance",
+                },
+            )
+        ]
+        pg_vector.add_documents(docs)
+    except Exception as e:
+        print(e)
+
+    return appointment
+
+
+@app.post("/save-contact")
+def book_appointment(request: ContactPersistenceRequest):
+    appointment = {
+        "customer_name": request.customer_name,
+        "contact_number": request.phone_number,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "time": datetime.now().strftime("%H:%M"),
+    }
+
+    try:
+        docs = [
+            Document(
+                page_content=str(appointment),
+                metadata={
+                    "service_provider": request.service_supplier,
+                    "topic": "customer_identification",
                 },
             )
         ]
