@@ -59,7 +59,7 @@ class VectorLoad(BaseModel):
 
 pg_vector = PGVectorStore()
 faiss = Faiss()
-faiss.add(documents=FAISS_DOCUMENTS)
+# faiss.add(documents=FAISS_DOCUMENTS)
 
 
 @app.post("/book-appointment")
