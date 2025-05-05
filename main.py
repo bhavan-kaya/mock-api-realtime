@@ -1,37 +1,28 @@
+import random
+from itertools import islice
 from typing import List, Optional
 
 from fastapi import FastAPI, Query
-from langchain.retrievers.document_compressors import CohereRerank
 from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
-from itertools import islice
 
-from rerankers import Reranker
-
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE, COHERE_API_KEY
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
+from faiss_data import FAISS_DOCUMENTS
+from faiss_store import Faiss
 from mock_data import docs, vehicles
 from rag import PGVectorStore
+from util import Utils
 
 app = FastAPI()
-appointments = []
 
 
 # Models for request and response payloads
 class AppointmentRequest(BaseModel):
-    customer_id: str
-    vehicle_id: str
-    date: str
-    time: str
-    service: str
-
-
-class AppointmentResponse(BaseModel):
-    appointment_id: int
-    customer_id: str
-    vehicle_id: str
+    customer_name: str
+    vehicle_details: str
     date: str
     time: str
     service: str
@@ -49,7 +40,9 @@ class VectorSearch(BaseModel):
     doHybridSearch: Optional[bool] = False
     hybridSearchOptions: Optional[HybridSearchOptions] = None
     native: Optional[bool] = False
+    contentOnly: Optional[bool] = False
     k: Optional[int] = 10
+    db: Optional[str] = "pg"
 
 
 class VectorLoad(BaseModel):
@@ -58,21 +51,20 @@ class VectorLoad(BaseModel):
 
 
 pg_vector = PGVectorStore()
+faiss = Faiss()
+faiss.add(documents=FAISS_DOCUMENTS)
 
 
-@app.post("/book-appointment", response_model=AppointmentResponse)
+@app.post("/book-appointment")
 def book_appointment(request: AppointmentRequest):
-    # Generate a new appointment ID
-    appointment_id = len(appointments) + 1
     appointment = {
-        "appointment_id": appointment_id,
-        "customer_id": request.customer_id,
-        "vehicle_id": request.vehicle_id,
+        "appointment_id": random.randint(1000, 9999),
+        "customer_name": request.customer_name,
+        "vehicle_details": request.vehicle_details,
         "date": request.date,
         "time": request.time,
         "service": request.service,
     }
-    appointments.append(appointment)
 
     try:
 
@@ -104,45 +96,48 @@ def get_vehicle_details(vehicle_id: str):
 def get_vector_info(data: VectorSearch):
     llm = ChatOpenAI(model_name="gpt-4o")
     prompt = PromptTemplate(
-        template=RAG_TEMPLATE, input_variables=["query", "information"]
+        template=RAG_TEMPLATE_THREE, input_variables=["query", "information"]
     )
     chain = prompt | llm
 
-    if data.doHybridSearch:
-        retrieved_docs = pg_vector.hybrid_search(
-            data.query,
-            data.filter,
-            data.k,
-            data.hybridSearchOptions.searchWeight,
-            data.hybridSearchOptions.useEntities,
-        )
+    if data.db == "faiss":
+        retrieved_docs = faiss.search(query=data.query, k=data.k)
     else:
-        retrieved_docs = pg_vector.similarity_search(
-            query=data.query, filter=data.filter, k=data.k, native=data.native
-        )
+        if data.doHybridSearch:
+            retrieved_docs = pg_vector.hybrid_search(
+                data.query,
+                data.filter,
+                data.k,
+                data.hybridSearchOptions.searchWeight,
+                data.hybridSearchOptions.useEntities,
+            )
+        else:
+            retrieved_docs = pg_vector.similarity_search(
+                query=data.query, filter=data.filter, k=data.k, native=data.native
+            )
 
     retrieved_texts = [doc.page_content for doc in retrieved_docs]
 
     if data.doRerank:
-        ranker = Reranker(
-            "cohere",
-            lang="en",
-            model_type="rerank-english-v3.0",
-            api_key=COHERE_API_KEY,
-        )
-        ranked_docs = ranker.rank(query=data.query, docs=retrieved_texts)
-        retrieved_texts = [
-            ranked_doc.document.text for ranked_doc in ranked_docs.results
-        ]
+        ranked_docs = Utils.get_ranked_documents(data.query, retrieved_texts)
+        retrieved_texts = [rank_doc.text for rank_doc in ranked_docs]
 
-    information = "\n".join(retrieved_texts)
+    information = "\n\n Car Profile:".join(
+        [f"{idx} {text}" for idx, text in enumerate(retrieved_texts)]
+    )
+
+    if data.contentOnly:
+        return information
 
     print("Query: ", data.query)
-    print("\n\nRetrieved texts: ", information)
+    print(
+        "\n\nRetrieved indices: ",
+        ", ".join([str(idx) for idx, _ in enumerate(retrieved_texts)]),
+    )
 
     response = chain.invoke({"query": data.query, "information": information})
 
-    return response
+    return response.content
 
 
 @app.get("/vector-store/load")
@@ -152,9 +147,17 @@ def load_vector_info():
 
 
 @app.post("/vector-store/load-docs")
-def load_vector_info():
+def load_vector_info(
+    start: Optional[int] = Query(
+        0, description="Start index for slicing the documents"
+    ),
+    end: Optional[int] = Query(None, description="End index for slicing the documents"),
+):
     loader = CSVLoader(file_path="data/vehicle_inventory_data.csv")
     docs = loader.load()
+
+    docs = docs[start:end] if end is not None else docs[start:]
+
     llm = ChatOpenAI(model_name="gpt-4o")
     prompt = PromptTemplate.from_template(template=INGESTION_TEMPLATE)
     chain = prompt | llm
@@ -172,17 +175,17 @@ def load_vector_info():
         response = chain.invoke({"information": doc.page_content})
         processed_doc = Document(
             page_content=str(response.content),
-            metadata={"id": idx},
+            metadata={"id": start + idx},
         )
         documents.append(processed_doc)
-        print("Document loaded: ", idx)
+        print("Document loaded: ", start + idx)
 
         if len(documents) % 10 == 0 or idx == len(docs) - 1:
             pg_vector.add_documents(documents)
             print(f"Added {len(documents)} documents to vector store.")
             documents.clear()
 
-    return f"Loaded {len(docs)} documents into the vector store."
+    return f"Loaded {len(docs)} documents into the vector store, from index {start} to {end or 'end'}."
 
 
 @app.get("/search")
@@ -190,7 +193,7 @@ def search(
     vin: Optional[str] = Query(None),
     stock_number: Optional[str] = Query(None),
     vehicle_type: Optional[str] = Query(None),
-    year: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
     make: Optional[str] = Query(None),
     model: Optional[str] = Query(None),
     trim: Optional[str] = Query(None),
@@ -204,7 +207,13 @@ def search(
     transmission: Optional[str] = Query(None),
     drive_type: Optional[str] = Query(None),
     doors: Optional[int] = Query(None),
+    engine_type: Optional[str] = Query(None),
+    features: Optional[str] = Query(None),
+    packages: Optional[str] = Query(None),
     description: Optional[str] = Query(None),
+    fields: Optional[str] = Query(None),
+    options: Optional[str] = Query(None),
+    context_limit: Optional[int] = Query(REALTIME_MAX_TOKENS),
 ):
     return pg_vector.search_vehicle_inventory(
         vin=vin,
@@ -224,7 +233,13 @@ def search(
         transmission=transmission,
         drive_type=drive_type,
         doors=doors,
+        engine_type=engine_type,
+        features=features,
+        packages=packages,
         description=description,
+        fields=fields,
+        options=options,
+        context_limit=context_limit,
     )
 
 
