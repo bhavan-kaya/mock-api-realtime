@@ -56,8 +56,11 @@ class PGVectorStore(metaclass=SingletonMeta):
             raise ConnectionError(f"Failed to connect to database: {str(e)}")
 
     def add_documents(self, docs: List[Document]):
-        # Adding documents to the vector store
-        self.store.add_documents(docs, ids=[doc.metadata["id"] for doc in docs])
+        for doc in docs:
+            try:
+                self.store.add_documents([doc], ids=[doc.metadata["id"]])
+            except Exception as e:
+                print(f"Failed to add document {doc.metadata.get('id')}: {e}")
 
     def build_filter_query(self, filter_dict: Dict[str, Any]) -> str:
         if not filter_dict:

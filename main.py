@@ -1,5 +1,6 @@
 import os
 import random
+import uuid
 from datetime import datetime
 from itertools import islice
 from typing import List, Optional
@@ -79,7 +80,7 @@ def book_appointment(request: AppointmentRequest):
             Document(
                 page_content=str(appointment),
                 metadata={
-                    "id": 1,
+                    "id": str(uuid.uuid4()),
                     "topic": "maintenance",
                 },
             )
@@ -105,6 +106,7 @@ def book_appointment(request: ContactPersistenceRequest):
             Document(
                 page_content=str(appointment),
                 metadata={
+                    "id": str(uuid.uuid4()),
                     "service_provider": request.service_supplier,
                     "topic": "customer_identification",
                 },
