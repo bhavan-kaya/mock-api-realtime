@@ -437,3 +437,6 @@ class PGVectorStore(metaclass=SingletonMeta):
         doc = nlp(query)
         entities = {ent.label_: ent.text for ent in doc.ents}
         return entities
+
+
+pg_vector_db = PGVectorStore()
