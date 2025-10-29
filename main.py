@@ -13,7 +13,11 @@ from pydantic import BaseModel
 from config import HOST, PORT
 from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
 from rag import pg_vector_db
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS, COLLECTION_ID
+from faiss_data import FAISS_DOCUMENTS
+from faiss_store import Faiss
 from mock_data import docs, vehicles
+from rag import PGVectorStore
 from util import Utils
 
 from app.api import api_router
@@ -60,6 +64,8 @@ class VectorLoad(BaseModel):
     docs: List[str]
     topic: str
 
+class GetContactRequest(BaseModel):
+    phone_number: str
 
 
 @app.post("/book-appointment")
@@ -178,6 +184,84 @@ def load_vector_info():
     pg_vector_db.add_documents(docs)
     return f"Loaded {len(docs)} documents into the vector store."
 
+
+@app.post("/save_contact_info")
+def save_contact_info(request: ContactPersistenceRequest):
+    contact_info = {
+        "customer_name": request.customer_name,
+        "phone_number": request.phone_number,
+        "service_supplier": request.service_supplier,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    try:
+        import uuid
+        docs = [
+            Document(
+                page_content=str(contact_info),
+                metadata={
+                    "id": str(uuid.uuid4()),
+                    "phone_number": request.phone_number,
+                },
+            )
+        ]
+        pg_vector_db.add_documents(docs)
+    except Exception as e:
+        print(f"Error saving contact: {e}")
+
+        raise
+
+    return {"status": "success", "message": "Contact information saved successfully."}
+
+
+@app.get("/get_contact_info")
+def get_contact_info(phone_number: str = Query(..., description="Customer phone number to search")):
+    """
+    Retrieve the most recent customer contact information by phone number.
+    Returns only the last instance if multiple records exist.
+    """
+    try:
+        query_sql = """
+            SELECT document, cmetadata, id
+            FROM langchain_pg_embedding 
+            WHERE collection_id = %s
+            AND cmetadata ->> 'phone_number' = %s
+            ORDER BY (cmetadata ->> 'timestamp') DESC
+            LIMIT 1;
+        """
+
+        with pg_vector_db.connection.cursor() as cur:
+            cur.execute(query_sql, (COLLECTION_ID, phone_number))
+            result = cur.fetchone()
+
+        if not result:
+            return {
+                "status": "not_found",
+                "message": f"No contact information found for phone number: {phone_number}",
+                "data": None
+            }
+
+        contact = {
+            "id": result[2],
+            "document": result[0],
+            "metadata": result[1] if result[1] else {}
+        }
+        print(f"Retrieved contact info: {contact}")
+        return {
+            "status": "success",
+            "message": "Contact information retrieved successfully",
+            "data": contact["document"]
+        }
+
+    except Exception as e:
+        print(f"Error retrieving contact info: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "message": str(e),
+            "data": None
+        }
 
 @app.post("/vector-store/load-docs")
 def load_vector_info(
