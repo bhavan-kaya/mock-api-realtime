@@ -179,18 +179,19 @@ For use:
 Query: {query}
 Context: {information}"""
 
-
+COLLECTION_ID = "88c3eb96-b1cc-41cd-9c9c-c4270982aaa8"
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "voice-demo")
 CONNECTION_STRING = os.getenv(
     "CONNECTION_STRING",
-    "postgresql+psycopg://sandeesh:mysecretpassword@localhost:5433/voice-demo",
+    "postgresql+psycopg://postgres:Lahiru1997@localhost:5432/voice-demo",
 )
+
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_NAME = os.getenv("DB_NAME", "kaya-dev")
-DB_USER = os.getenv("DB_USER", "sandeesh")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "mysecretpassword")
-DB_PORT = os.getenv("DB_PORT", "5433")
+DB_NAME = os.getenv("DB_NAME", "voice-demo")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "Lahiru1997")
+DB_PORT = os.getenv("DB_PORT", "5432")
 INGESTION_TEMPLATE = os.getenv("INGESTION_TEMPLATE", INGESTION_TEMPLATE_ONE)
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
