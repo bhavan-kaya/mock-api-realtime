@@ -183,7 +183,7 @@ For use:
 Query: {query}
 Context: {information}"""
 
-COLLECTION_ID = "88c3eb96-b1cc-41cd-9c9c-c4270982aaa8"
+
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "voice-demo")
 CONNECTION_STRING = os.getenv(
     "CONNECTION_STRING",
@@ -199,9 +199,9 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 INGESTION_TEMPLATE = os.getenv("INGESTION_TEMPLATE", INGESTION_TEMPLATE_ONE)
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
-COLLECTION_ID = os.getenv("COLLECTION_ID", "ee5c4a77-aaa9-4933-b93b-70fc3df4d3a2")
+COLLECTION_ID = os.getenv("COLLECTION_ID", "88c3eb96-b1cc-41cd-9c9c-c4270982aaa8")
 HOST = os.getenv("HOST", "localhost")
-PORT = os.getenv("PORT", "8000")
+PORT = int(os.getenv("PORT", 8080))
 APP_DEBUG = os.getenv("APP_DEBUG", False)
 VERBOSE = os.getenv("VERBOSE", False)
 REALTIME_MAX_TOKENS = os.getenv("REALTIME_MAX_TOKENS", 6000)

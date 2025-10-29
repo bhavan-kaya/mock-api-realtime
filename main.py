@@ -3,6 +3,7 @@ from datetime import datetime
 from itertools import islice
 from typing import List, Optional
 from urllib.parse import unquote
+import uvicorn
 
 from fastapi import FastAPI, Query
 from langchain_community.document_loaders.csv_loader import CSVLoader
@@ -185,10 +186,9 @@ def save_contact_info(request: ContactPersistenceRequest):
     contact_info = {
         "customer_name": request.customer_name,
         "phone_number": request.phone_number,
-        "service_supplier": request.service_supplier,
         "timestamp": datetime.now().isoformat()
     }
-
+    print(f"Saving contact info: {contact_info}")
     try:
         import uuid
         docs = [
@@ -218,7 +218,7 @@ def get_contact_info(phone_number: str = Query(..., description="Customer phone 
     try:
         # Decode URL-encoded phone number
         decoded_phone = unquote(phone_number)
-        
+        print(f"decoded phone number: {decoded_phone}")
         query_sql = """
             SELECT document, cmetadata, id
             FROM langchain_pg_embedding 
@@ -360,6 +360,4 @@ def search(
 
 # Run the application (if needed for local testing)
 if __name__ == "__main__":
-    import uvicorn
-
     uvicorn.run(app, host=HOST, port=PORT)
