@@ -59,12 +59,11 @@ class AppointmentService:
             )
 
     @staticmethod
-    async def update_appointment(phone_number: str, update_data: Dict[str, Any]) -> Dict[str, str]:
+    async def update_appointment(customer_data: Dict[str, Any]) -> Dict[str, str]:
         """
         Update an existing appointment.
 
         Args:
-            phone_number: The phone number of the appointment to update
             update_data: The data to update
 
         Returns:
@@ -75,30 +74,31 @@ class AppointmentService:
             AppointmentDataError: If there's an error updating the appointment
         """
         try:
+            # Get the customer phone number
+            phone_number = customer_data.get("customer_phone_number")
+
+            # Create a filter
             filter_criteria = {
                 "phone_number": phone_number,
                 "type": "appointment"
             }
 
+            # Check for existing data
             results = pg_vector_db.similarity_search(
                 query="",
                 filter=filter_criteria,
                 k=1
             )
-
             if not results:
                 raise AppointmentNotFoundError(
                     detail=f"No appointment found for phone number: {phone_number}"
                 )
 
+            # Create the updated customer data object
             doc_id = results[0].metadata["id"]
-            updated_data = json.dumps({
-                "phone_number": phone_number,
-                **update_data
-            })
-
+            customer_data = json.dumps(customer_data)
             updated_doc = Document(
-                page_content=updated_data,
+                page_content=customer_data,
                 metadata={
                     "id": doc_id,
                     "phone_number": phone_number,
@@ -107,7 +107,11 @@ class AppointmentService:
             )
 
             pg_vector_db.add_documents([updated_doc])
-            return {"message": "Appointment updated successfully"}
+            return {
+                "id": doc_id,
+                "data": customer_data,
+                "message": "Appointment updated successfully"
+            }
 
         except (AppointmentNotFoundError, AppointmentDataError):
             raise
@@ -117,12 +121,11 @@ class AppointmentService:
             )
 
     @staticmethod
-    async def create_appointment(phone_number: str, customer_data: Dict[str, Any]) -> Dict[str, str]:
+    async def create_appointment(customer_data: Dict[str, Any]) -> Dict[str, str]:
         """
         Create a new appointment.
 
         Args:
-            phone_number: The customer's phone number
             customer_data: The appointment data
 
         Returns:
@@ -133,31 +136,33 @@ class AppointmentService:
             AppointmentDataError: If there's an error creating the appointment
         """
         try:
+            # Get the customer phone number
+            phone_number = customer_data.get("customer_phone_number")
+
+            # Create filter
             filter_criteria = {
                 "phone_number": phone_number,
                 "type": "appointment"
             }
 
+            # Check for existing data
             existing_appointments = pg_vector_db.similarity_search(
                 query="",
                 filter=filter_criteria,
                 k=1
             )
-
             if existing_appointments:
                 raise AppointmentAlreadyExistsError(
                     detail=f"An appointment already exists for phone number: {phone_number}"
                 )
 
+            # Create the payload to save on the DB
             customer_id = str(uuid.uuid4())
-            data = json.dumps({
-                "phone_number": phone_number,
-                **customer_data
-            })
+            customer_data = json.dumps(customer_data)
 
             document = [
                 Document(
-                    page_content=data,
+                    page_content=customer_data,
                     metadata={
                         "id": customer_id,
                         "phone_number": phone_number,
@@ -166,9 +171,12 @@ class AppointmentService:
                 )
             ]
 
+            # Save to DB
             pg_vector_db.add_documents(document)
+
             return {
                 "id": customer_id,
+                "data": customer_data,
                 "message": "Appointment created successfully"
             }
 

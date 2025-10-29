@@ -2,6 +2,7 @@ import random
 from datetime import datetime
 from itertools import islice
 from typing import List, Optional
+from urllib.parse import unquote
 
 from fastapi import FastAPI, Query
 from langchain_community.document_loaders.csv_loader import CSVLoader
@@ -10,18 +11,12 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from config import HOST, PORT
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
-from rag import pg_vector_db
-from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS, COLLECTION_ID
-from faiss_data import FAISS_DOCUMENTS
-from faiss_store import Faiss
-from mock_data import docs, vehicles
-from rag import PGVectorStore
-from util import Utils
-
 from app.api import api_router
-
+from config import HOST, PORT
+from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS, COLLECTION_ID
+from mock_data import docs, vehicles
+from rag import pg_vector_db
+from util import Utils
 
 app = FastAPI()
 
@@ -221,6 +216,9 @@ def get_contact_info(phone_number: str = Query(..., description="Customer phone 
     Returns only the last instance if multiple records exist.
     """
     try:
+        # Decode URL-encoded phone number
+        decoded_phone = unquote(phone_number)
+        
         query_sql = """
             SELECT document, cmetadata, id
             FROM langchain_pg_embedding 
@@ -231,7 +229,7 @@ def get_contact_info(phone_number: str = Query(..., description="Customer phone 
         """
 
         with pg_vector_db.connection.cursor() as cur:
-            cur.execute(query_sql, (COLLECTION_ID, phone_number))
+            cur.execute(query_sql, (COLLECTION_ID, decoded_phone))
             result = cur.fetchone()
 
         if not result:
