@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 INGESTION_TEMPLATE_ONE = """You are a highly knowledgeable assistant tasked with creating a detailed vehicle profile for vector search optimization. Use the provided data and enrich it by incorporating publicly available information and relevant details about the specific car type to make the profile more comprehensive and search-friendly. Ensure the profile is written in a natural language format, includes enriched details, and generates hashtags dynamically based on the vehicle's unique features.
               ### Template for Vehicle Profile:
                 1. **Basic Information:**
@@ -195,6 +199,8 @@ INGESTION_TEMPLATE = os.getenv("INGESTION_TEMPLATE", INGESTION_TEMPLATE_ONE)
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
 COLLECTION_ID = os.getenv("COLLECTION_ID", "ee5c4a77-aaa9-4933-b93b-70fc3df4d3a2")
+HOST = os.getenv("HOST", "localhost")
+PORT = os.getenv("PORT", "8000")
 APP_DEBUG = os.getenv("APP_DEBUG", False)
 VERBOSE = os.getenv("VERBOSE", False)
 REALTIME_MAX_TOKENS = os.getenv("REALTIME_MAX_TOKENS", 6000)

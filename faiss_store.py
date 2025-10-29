@@ -30,4 +30,5 @@ class Faiss:
         return self.vector_store.similarity_search(query, k=k)
 
 
+faiss_db = Faiss()
 

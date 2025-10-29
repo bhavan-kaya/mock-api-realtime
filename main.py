@@ -1,4 +1,3 @@
-import os
 import random
 from datetime import datetime
 from itertools import islice
@@ -11,14 +10,19 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
+from config import HOST, PORT
 from config import INGESTION_TEMPLATE, RAG_TEMPLATE_THREE, REALTIME_MAX_TOKENS
-from faiss_data import FAISS_DOCUMENTS
-from faiss_store import Faiss
+from rag import pg_vector_db
 from mock_data import docs, vehicles
-from rag import PGVectorStore
 from util import Utils
 
+from app.api import api_router
+
+
 app = FastAPI()
+
+# Include routers with version prefixes
+app.include_router(api_router, prefix="/api")
 
 
 # Models for request and response payloads
@@ -57,10 +61,6 @@ class VectorLoad(BaseModel):
     topic: str
 
 
-pg_vector = PGVectorStore()
-faiss = Faiss()
-# faiss.add(documents=FAISS_DOCUMENTS)
-
 
 @app.post("/book-appointment")
 def book_appointment(request: AppointmentRequest):
@@ -84,7 +84,7 @@ def book_appointment(request: AppointmentRequest):
                 },
             )
         ]
-        pg_vector.add_documents(docs)
+        pg_vector_db.add_documents(docs)
     except Exception as e:
         print(e)
 
@@ -110,7 +110,7 @@ def book_appointment(request: ContactPersistenceRequest):
                 },
             )
         ]
-        pg_vector.add_documents(docs)
+        pg_vector_db.add_documents(docs)
     except Exception as e:
         print(e)
 
@@ -134,10 +134,10 @@ def get_vector_info(data: VectorSearch):
     chain = prompt | llm
 
     if data.db == "faiss":
-        retrieved_docs = faiss.search(query=data.query, k=data.k)
+        retrieved_docs = faiss_db.search(query=data.query, k=data.k)
     else:
         if data.doHybridSearch:
-            retrieved_docs = pg_vector.hybrid_search(
+            retrieved_docs = pg_vector_db.hybrid_search(
                 data.query,
                 data.filter,
                 data.k,
@@ -145,7 +145,7 @@ def get_vector_info(data: VectorSearch):
                 data.hybridSearchOptions.useEntities,
             )
         else:
-            retrieved_docs = pg_vector.similarity_search(
+            retrieved_docs = pg_vector_db.similarity_search(
                 query=data.query, filter=data.filter, k=data.k, native=data.native
             )
 
@@ -175,7 +175,7 @@ def get_vector_info(data: VectorSearch):
 
 @app.get("/vector-store/load")
 def load_vector_info():
-    pg_vector.add_documents(docs)
+    pg_vector_db.add_documents(docs)
     return f"Loaded {len(docs)} documents into the vector store."
 
 
@@ -214,7 +214,7 @@ def load_vector_info(
         print("Document loaded: ", start + idx)
 
         if len(documents) % 10 == 0 or idx == len(docs) - 1:
-            pg_vector.add_documents(documents)
+            pg_vector_db.add_documents(documents)
             print(f"Added {len(documents)} documents to vector store.")
             documents.clear()
 
@@ -248,7 +248,7 @@ def search(
     options: Optional[str] = Query(None),
     context_limit: Optional[int] = Query(REALTIME_MAX_TOKENS),
 ):
-    return pg_vector.search_vehicle_inventory(
+    return pg_vector_db.search_vehicle_inventory(
         vin=vin,
         stock_number=stock_number,
         vehicle_type=vehicle_type,
@@ -280,4 +280,4 @@ def search(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    uvicorn.run(app, host=HOST, port=PORT)
