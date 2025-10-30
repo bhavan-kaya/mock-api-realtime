@@ -261,6 +261,67 @@ def get_contact_info(phone_number: str = Query(..., description="Customer phone 
             "data": None
         }
 
+@app.delete("/delete_contact_info")
+def delete_contact_info(phone_number: str = Query(..., description="Customer phone number to delete all records")):
+    """
+    Delete all customer contact information records by phone number.
+    Returns the count of deleted records.
+    """
+    try:
+        decoded_phone = unquote(phone_number)
+        print(f"Deleting records for phone number: {decoded_phone}")
+
+        count_query = """
+            SELECT COUNT(*)
+            FROM langchain_pg_embedding 
+            WHERE collection_id = %s
+            AND cmetadata ->> 'phone_number' = %s;
+        """
+        
+        delete_query = """
+            DELETE FROM langchain_pg_embedding 
+            WHERE collection_id = %s
+            AND cmetadata ->> 'phone_number' = %s;
+        """
+        
+        with pg_vector_db.connection.cursor() as cur:
+            # Get count of records to be deleted
+            cur.execute(count_query, (COLLECTION_ID, decoded_phone))
+            count_result = cur.fetchone()
+            deleted_count = count_result[0] if count_result else 0
+            
+            if deleted_count == 0:
+                return {
+                    "status": "not_found",
+                    "message": f"No contact information found for phone number: {phone_number}",
+                    "deleted_count": 0
+                }
+            
+            # Delete the records
+            cur.execute(delete_query, (COLLECTION_ID, decoded_phone))
+            pg_vector_db.connection.commit()
+        
+        print(f"Deleted {deleted_count} record(s) for phone number: {decoded_phone}")
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted all contact information for phone number: {phone_number}",
+            "deleted_count": deleted_count
+        }
+        
+    except Exception as e:
+        print(f"Error deleting contact info: {e}")
+        import traceback
+        traceback.print_exc()
+        pg_vector_db.connection.rollback()
+        return {
+            "status": "error",
+            "message": str(e),
+            "deleted_count": 0
+        }
+
+
+
 @app.post("/vector-store/load-docs")
 def load_vector_info(
     start: Optional[int] = Query(
