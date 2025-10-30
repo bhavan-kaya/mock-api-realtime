@@ -1,12 +1,29 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class AppointmentRequestModel(BaseModel):
+    """
+    Model for appointment request data validation.
+    """
     customer_name: str
     customer_phone_number: str
     appointment_date: str
     appointment_time: str
-    vehicle_details: Optional[str]
-    service: Optional[str]
-    remarks: Optional[str]
+    vehicle_details: Optional[str] = None
+    service: Optional[str] = None
+    remarks: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "customer_name": "John Doe",
+                "customer_phone_number": "+1234567890",
+                "appointment_date": "2025-11-15",
+                "appointment_time": "14:30",
+                "vehicle_details": "Toyota Camry 2020, Black",
+                "service": "Full Service",
+                "remarks": "Please check the air conditioning"
+            }
+        }
