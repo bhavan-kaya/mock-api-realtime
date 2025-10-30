@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
-import spacy
 import psycopg2
+import spacy
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
@@ -18,7 +18,6 @@ from config import (
     DB_PORT,
     SPACY_MODEL,
     COLLECTION_ID,
-    REALTIME_MAX_TOKENS,
 )
 from singleton import SingletonMeta
 
@@ -154,8 +153,11 @@ class PGVectorStore(metaclass=SingletonMeta):
         except Exception as e:
             print(f"Failed hybrid search: {str(e)}")
 
-    def delete_documents(self):
-        pass
+    def delete_documents(self, document_ids: List[str]):
+        """
+        Deletes documents from the vector store based on their IDs.
+        """
+        self.store.delete(ids=document_ids)
 
     def search_vehicle_inventory(
         self,

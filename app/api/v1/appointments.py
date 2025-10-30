@@ -1,5 +1,5 @@
 from urllib.parse import unquote
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Query
 
 from app.models.appointment_request_model import AppointmentRequestModel
 from app.models.appointment_update_model import AppointmentUpdateModel
@@ -14,15 +14,57 @@ from app.exceptions import (
 router = APIRouter(prefix="/appointments")
 
 
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        409: {"description": "Appointment already exists"},
+        422: {"description": "Invalid appointment data"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def create_appointment(appointment: AppointmentRequestModel):
+    """
+    Create a new appointment.
+
+    Args:
+        appointment: The appointment data including customer phone number
+
+    Returns:
+        dict: The created appointment ID and success message
+
+    Raises:
+        HTTPException: If appointment already exists, data is invalid, or an error occurs
+    """
+    try:
+        # Parse the payload
+        customer_data = appointment.model_dump(exclude_none=True)
+
+        # Create the appointment
+        return await AppointmentService.create_appointment(customer_data)
+
+    except (AppointmentAlreadyExistsError, AppointmentDataError) as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"detail": f"Failed to create appointment: {str(e)}"}
+        )
+
 @router.get(
-    "/{phone_number}",
+    "",
     responses={
         400: {"description": "Invalid phone number format"},
         404: {"description": "Appointment not found"},
         500: {"description": "Internal server error"}
     }
 )
-async def get_appointment_by_phone_number(phone_number: str):
+async def get_appointment_by_phone_number(
+    phone_number: str = Query(..., description="Customer phone number")
+):
     """
     Get an appointment by phone number.
     
@@ -54,7 +96,7 @@ async def get_appointment_by_phone_number(phone_number: str):
         )
 
 @router.put(
-    "/{phone_number}",
+    "",
     responses={
         404: {"description": "Appointment not found"},
         422: {"description": "Invalid appointment data"},
@@ -93,36 +135,38 @@ async def update_appointment(appointment: AppointmentUpdateModel):
             detail={"detail": f"Failed to update appointment: {str(e)}"}
         )
 
-@router.post(
+
+@router.delete(
     "",
-    status_code=status.HTTP_201_CREATED,
     responses={
-        409: {"description": "Appointment already exists"},
-        422: {"description": "Invalid appointment data"},
+        400: {"description": "Invalid phone number format"},
+        404: {"description": "Appointment not found"},
         500: {"description": "Internal server error"}
     }
 )
-async def save_appointment(appointment: AppointmentRequestModel):
+async def delete_appointment_by_phone_number(
+        phone_number: str = Query(..., description="Customer phone number")
+):
     """
-    Create a new appointment.
-    
+    Delete an appointment by phone number.
+
     Args:
-        appointment: The appointment data including customer phone number
-        
+        phone_number: The phone number to search
+
     Returns:
-        dict: The created appointment ID and success message
-        
+        dict: Success message
+
     Raises:
-        HTTPException: If appointment already exists, data is invalid, or an error occurs
+        HTTPException: If appointment is not found, phone number is invalid, or an error occurs
     """
     try:
-        # Parse the payload
-        customer_data = appointment.model_dump(exclude_none=True)
+        # Decode URL-encoded phone number
+        decoded_phone = unquote(phone_number)
 
-        # Create the appointment
-        return await AppointmentService.create_appointment(customer_data)
+        # Get contact info from vector store
+        return await AppointmentService.delete_appointment(decoded_phone)
 
-    except (AppointmentAlreadyExistsError, AppointmentDataError) as e:
+    except AppointmentNotFoundError as e:
         raise HTTPException(
             status_code=e.status_code,
             detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
@@ -130,5 +174,5 @@ async def save_appointment(appointment: AppointmentRequestModel):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"detail": f"Failed to create appointment: {str(e)}"}
+            detail={"detail": f"Failed to retrieve appointment: {str(e)}"}
         )
