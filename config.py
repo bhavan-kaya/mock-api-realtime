@@ -202,8 +202,15 @@ SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
 COLLECTION_ID = os.getenv("COLLECTION_ID", "88c3eb96-b1cc-41cd-9c9c-c4270982aaa8")
 # HOST = os.getenv("HOST", "localhost")
 # PORT = int(os.getenv("PORT", 8080))
-HOST = os.getenv("HOST", "0.0.0.0")  # ✅ changed from localhost
+HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8080))
 APP_DEBUG = os.getenv("APP_DEBUG", False)
 VERBOSE = os.getenv("VERBOSE", False)
 REALTIME_MAX_TOKENS = os.getenv("REALTIME_MAX_TOKENS", 6000)
+
+# Storage Configuration
+STORAGE_TYPE = os.getenv("STORAGE_TYPE", "gcp").lower()
+
+# GCP Configuration
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "")
+GCP_CREDENTIALS_PATH = os.getenv("GCP_CREDENTIALS_PATH", "")
