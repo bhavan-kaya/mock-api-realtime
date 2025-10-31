@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
 from enum import Enum
+
+from pydantic import BaseModel
+
 
 class FileType(str, Enum):
     RECORDING = "recording"

@@ -1,18 +1,20 @@
-import os
-import shutil
-from pathlib import Path
-from typing import Optional, Union, BinaryIO, TextIO
 import logging
-from enum import Enum
+import os
+import asyncio
+from pathlib import Path
+from typing import Optional
 
-from app.models.gcp_data_model import GCPFileResponse, GCPTextResponse, FileType
 from app.exceptions.gcp_exceptions import (
-    GCPFileNotFoundError, 
-    GCPStorageError,
+    BlobFileNotFoundError,
+    StorageError,
     InvalidSIDError
 )
+from app.models.gcp_data_model import GCPFileResponse, GCPTextResponse, FileType
 
+
+# Initialize logger
 logger = logging.getLogger(__name__)
+
 
 class LocalStorageService:
     def __init__(self, base_path: Optional[str] = None):
@@ -26,12 +28,66 @@ class LocalStorageService:
         self.base_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"Initialized Local Storage at: {self.base_path.absolute()}")
 
-    def _validate_sid(self, sid: str) -> None:
+    @classmethod
+    def _get_content_type(cls, file_type: FileType) -> str:
+        """Get the content type based on file type."""
+        return {
+            FileType.RECORDING: "audio/mpeg",
+            FileType.SYNOPSIS: "audio/mpeg",
+            FileType.TRANSCRIPT: "text/plain",
+            FileType.SUMMARY: "text/plain"
+        }.get(file_type, "application/octet-stream")
+
+    @classmethod
+    def _validate_sid(cls, sid: str) -> None:
         """Validate the SID format."""
         if not sid or not isinstance(sid, str) or len(sid.strip()) == 0:
             raise InvalidSIDError(sid)
 
-    def _get_file_path(self, sid: str, file_type: FileType) -> Path:
+    def _find_latest_sid_blocking(self) -> Optional[str]:
+        latest_sid = None
+        latest_mod_time = 0.0
+
+        try:
+            # Iterate through all entries in the base path
+            for sid_entry in self.base_path.iterdir():
+                if not sid_entry.is_dir():
+                    continue  # Skip files at the root
+
+                current_sid = sid_entry.name
+                current_sid_latest_mod_time = 0.0
+                found_file_in_sid = False
+
+                # Recursively walk through the SID directory
+                for root, _, files in os.walk(sid_entry):
+                    for file in files:
+                        found_file_in_sid = True
+                        file_path = Path(root) / file
+                        try:
+                            mod_time = file_path.stat().st_mtime
+                            if mod_time > current_sid_latest_mod_time:
+                                current_sid_latest_mod_time = mod_time
+
+                        except FileNotFoundError:
+                            # File might be deleted during iteration, safe to ignore
+                            continue
+
+                # Now compare this SID's latest time to the overall latest
+                if found_file_in_sid and current_sid_latest_mod_time > latest_mod_time:
+                    latest_mod_time = current_sid_latest_mod_time
+                    latest_sid = current_sid
+
+            if latest_sid:
+                logger.info(f"Found latest SID '{latest_sid}' (mod time: {latest_mod_time})")
+            else:
+                logger.warning(f"No SIDs or files found in {self.base_path}")
+            return latest_sid
+
+        except Exception as e:
+            logger.error(f"Error scanning local directory {self.base_path}: {e}")
+            raise StorageError(f"Failed to scan local storage: {str(e)}")
+
+    def _get_file_path(self, sid: str, file_type: FileType) -> Optional[Path]:
         """Generate the file path based on SID and file type with proper prefix."""
         self._validate_sid(sid)
         
@@ -48,13 +104,16 @@ class LocalStorageService:
 
         # List the files in the directory
         sid_dir = self.base_path / sid
-        files = os.listdir(sid_dir)
+        
+        # Check if the directory exists
+        if not sid_dir.exists():
+            return None
 
         # Check if the file exists using glob
         file_pattern = f"{prefix}*{file_ext}"
         matching_files = list(sid_dir.glob(file_pattern))
-        
-        return sid_dir / matching_files[0] if matching_files else None
+
+        return matching_files[0] if matching_files else None
 
     async def get_file(self, sid: str, file_type: FileType) -> GCPFileResponse:
         """
@@ -74,7 +133,7 @@ class LocalStorageService:
         try:
             file_path = self._get_file_path(sid, file_type)
             if not file_path:
-                raise GCPFileNotFoundError(sid, file_type.value)
+                raise BlobFileNotFoundError(sid, file_type.value)
             
             # Read the file content
             content = file_path.read_bytes()
@@ -88,11 +147,11 @@ class LocalStorageService:
                 filename=file_path.name
             )
             
-        except GCPFileNotFoundError:
+        except BlobFileNotFoundError:
             raise
         except Exception as e:
             logger.error(f"Error retrieving {file_type} for SID {sid}: {str(e)}")
-            raise GCPStorageError(f"Failed to retrieve {file_type}: {str(e)}")
+            raise StorageError(f"Failed to retrieve {file_type}: {str(e)}")
 
     async def get_text_file(self, sid: str, file_type: FileType) -> GCPTextResponse:
         """
@@ -116,7 +175,10 @@ class LocalStorageService:
             file_path = self._get_file_path(sid, file_type)
             
             if not file_path.exists():
-                raise GCPFileNotFoundError(sid, file_type.value)
+                raise BlobFileNotFoundError(
+                    sid=sid,
+                    file_type=str(file_type.value)
+                )
                 
             # Read the actual .txt file
             content = file_path.read_text(encoding='utf-8')
@@ -129,17 +191,46 @@ class LocalStorageService:
                 filename=file_path.name
             )
             
-        except GCPFileNotFoundError:
+        except BlobFileNotFoundError:
             raise
         except Exception as e:
             logger.error(f"Error retrieving text {file_type} for SID {sid}: {str(e)}")
-            raise GCPStorageError(f"Failed to retrieve {file_type}: {str(e)}")
+            raise StorageError(f"Failed to retrieve {file_type}: {str(e)}")
 
-    def _get_content_type(self, file_type: FileType) -> str:
-        """Get the content type based on file type."""
-        return {
-            FileType.RECORDING: "audio/mpeg",
-            FileType.SYNOPSIS: "audio/mpeg",
-            FileType.TRANSCRIPT: "text/plain",
-            FileType.SUMMARY: "text/plain"
-        }.get(file_type, "application/octet-stream")
+    async def get_latest_sid(self, file_type: FileType) -> Optional[str]:
+        """
+        Retrieves the SID (top-level folder) that contains the most recently
+        modified file in the local storage base_path.
+
+        Args:
+            file_type: Type of file to retrieve
+
+        Returns:
+            The latest SID as a string, or None if the base_path is empty.
+
+        Raises:
+            StorageError: If there's an error accessing the filesystem.
+        """
+        logger.info(f"Attempting to find the latest SID in {self.base_path}")
+
+        loop = asyncio.get_running_loop()
+        try:
+            # Run the blocking filesystem scan in an executor
+            latest_sid = await loop.run_in_executor(
+                executor=None,
+                func=self._find_latest_sid_blocking
+            )
+            if latest_sid is None:
+                raise BlobFileNotFoundError(
+                    sid="None",
+                    file_type=FileType.value,
+                )
+            return latest_sid
+
+        except Exception as e:
+            logger.error(f"Error finding latest SID: {str(e)}")
+            if isinstance(e, GCPStorageError):
+                raise
+            if isinstance(e, BlobFileNotFoundError):
+                raise
+            raise GCPStorageError(f"Failed to find latest SID: {str(e)}")
