@@ -213,4 +213,5 @@ STORAGE_TYPE = os.getenv("STORAGE_TYPE", "gcp").lower()
 
 # GCP Configuration
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "")
+GCS_BLOB_EXPIRATION = int(os.getenv("GCS_BLOB_EXPIRATION", 3600))
 GCP_CREDENTIALS_PATH = os.getenv("GCP_CREDENTIALS_PATH", "")
