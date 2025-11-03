@@ -4,15 +4,18 @@ from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 
 from app.exceptions.gcp_exceptions import (
-    BlobFileNotFoundError,
-    StorageError,
-    InvalidSIDError
+    DataException
 )
+from app.models.response_status import ResponseStatus
 from app.services.storage import storage_factory
 from app.models.storage_response_model import StorageResponse
 
+
+# Get logger
 logger = logging.getLogger(__name__)
 
+
+# Create API router
 router = APIRouter(prefix="/conversations")
 
 # Create the storage instance
@@ -20,48 +23,36 @@ storage = storage_factory.get_storage()
 
 
 @router.get("", response_model=StorageResponse)
-async def get_conversation(
-        sid: str = Query(..., description="The session ID to retrieve the recording for")
+async def get_post_conversation_artifacts(
+        sid: str = Query(..., description="The session ID to retrieve the post conversation artifacts for")
 ):
     """
-    Retrieve the audio recording file for a given SID.
+    Retrieve post conversation artifacts of a given SID.
     
     Args:
-        sid: The session ID to retrieve the recording for
+        sid: The session ID to retrieve the post conversation artifacts for
         
     Returns:
-        StreamingResponse: The audio file as a streaming response
+        StorageResponse: The post conversation artifacts as a storage response
     """
     try:
-        conversation_data = await storage.get_all_files_in_sid(sid)
+        post_conversation_data = await storage.get_all_files_in_sid(sid)
 
         # Create the response model
         return StorageResponse(
             sid=sid,
-            data=conversation_data
+            data=post_conversation_data,
+            status=ResponseStatus.SUCCESS
         )
 
-    except BlobFileNotFoundError as e:
-        logger.error(f"File not found error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except InvalidSIDError as e:
-        logger.error(f"SID error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except StorageError as e:
-        logger.error(f"Storage error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e)
-        )
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Unexpected error in get_post_conversation_artifacts: {str(e)}")
+        if isinstance(e, DataException):
+            raise HTTPException(
+                status_code=e.status_code,
+                detail=str(e.detail)
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred"
+            detail="An unexpected error occurred. Please try again later."
         )

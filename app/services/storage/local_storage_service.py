@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.exceptions.gcp_exceptions import (
+    BlobNotFoundError,
     StorageError,
     InvalidSIDError
 )
@@ -98,17 +99,12 @@ class LocalStorageService:
                 self._list_all_files_blocking,
                 sid_dir
             )
+            if not file_paths:
+                raise BlobNotFoundError(sid=sid)
 
             return file_paths
 
-        except InvalidSIDError:
-            logger.warning(f"Invalid SID provided: {sid}")
-            raise
         except Exception as e:
             error_message = f"Error listing files for SID {sid}: {str(e)}"
             logger.error(error_message)
-
-            if isinstance(e, StorageError):
-                raise
-
-            raise StorageError(error_message)
+            raise

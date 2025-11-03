@@ -7,11 +7,11 @@ class DataException(Exception):
         self.status_code = status_code
         super().__init__(self.detail)
 
-class BlobFileNotFoundError(DataException):
+class BlobNotFoundError(DataException):
     """Raised when a requested file is not found in the storage"""
-    def __init__(self, sid: str, file_type: str):
+    def __init__(self, sid: str):
         super().__init__(
-            detail=f"{file_type.capitalize()} file not found for SID: {sid}",
+            detail=f"No files found for SID: {sid}",
             status_code=status.HTTP_404_NOT_FOUND
         )
 
