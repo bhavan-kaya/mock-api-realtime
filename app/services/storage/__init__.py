@@ -1,10 +1,11 @@
 import logging
 from typing import Union
 
-from app.services.gcp_service import GCPService
-from app.services.local_storage_service import LocalStorageService
+from app.services.storage.gcp_bucket_service import GCPService
+from app.services.storage.local_storage_service import LocalStorageService
 from app.models.storage_type import StorageType
 from config import STORAGE_TYPE
+
 
 class StorageFactory:
     """
@@ -66,8 +67,4 @@ class StorageFactory:
         raise ValueError(f"Unsupported storage type: {cls._storage_type}")
 
 
-# Create a singleton instance of the storage factory
 storage_factory = StorageFactory()
-
-# Initialize with config value
-storage_factory.set_storage_type(STORAGE_TYPE)
