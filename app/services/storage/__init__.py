@@ -1,8 +1,8 @@
 import logging
 from typing import Union
 
-from app.services.storage.gcp_bucket_service import GCPService
-from app.services.storage.local_storage_service import LocalStorageService
+from app.services.storage.gcp_bucket.gcp_bucket_service import GCPService
+from app.services.storage.local.local_storage_service import LocalStorageService
 from app.models.storage_type import StorageType
 from config import STORAGE_TYPE
 

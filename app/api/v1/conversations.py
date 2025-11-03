@@ -1,25 +1,20 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Query
-from fastapi.responses import StreamingResponse
 
 from app.exceptions.gcp_exceptions import (
     DataException
 )
 from app.models.response_status import ResponseStatus
-from app.services.storage import storage_factory
 from app.models.storage_response_model import StorageResponse
+from app.services.conversation_service import conversation_service
 
 
 # Get logger
 logger = logging.getLogger(__name__)
 
-
 # Create API router
 router = APIRouter(prefix="/conversations")
-
-# Create the storage instance
-storage = storage_factory.get_storage()
 
 
 @router.get("", response_model=StorageResponse)
@@ -36,7 +31,7 @@ async def get_post_conversation_artifacts(
         StorageResponse: The post conversation artifacts as a storage response
     """
     try:
-        post_conversation_data = await storage.get_all_files_in_sid(sid)
+        post_conversation_data = await conversation_service.get_post_conversation_artifacts(sid)
 
         # Create the response model
         return StorageResponse(
