@@ -1,8 +1,8 @@
 from urllib.parse import unquote
 from fastapi import APIRouter, status, HTTPException, Query
 
-from app.models.appointment.appointment_request_model import AppointmentRequestModel
-from app.models.appointment.appointment_update_model import AppointmentUpdateModel
+from app.models.appointment_request_model import AppointmentRequestModel
+from app.models.appointment_update_model import AppointmentUpdateModel
 from app.services.appointments_service import AppointmentService
 from app.exceptions import (
     AppointmentNotFoundError,

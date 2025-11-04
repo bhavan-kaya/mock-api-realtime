@@ -1,4 +1,4 @@
-from app.exceptions.appointment.appointment_exceptions import (
+from .appointment_exceptions import (
     AppointmentException,
     AppointmentNotFoundError,
     AppointmentAlreadyExistsError,
