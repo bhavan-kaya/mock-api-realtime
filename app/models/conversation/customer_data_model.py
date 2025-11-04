@@ -40,6 +40,7 @@ class CallDataModel(BaseModel):
     duration: str
     sentiment: str
     artifacts: List[FileData]
+    summary: str
     transferred: bool
     abandoned: bool
     e_lead: bool

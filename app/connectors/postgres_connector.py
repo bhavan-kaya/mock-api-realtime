@@ -97,15 +97,16 @@ class PostgresConnector:
             created_time TIMESTAMPTZ,
             sid VARCHAR(100) UNIQUE,
             call_duration TEXT,
-            sentiment TEXT,
+            sentiment VARCHAR(4),
             artifacts JSONB,
+            summary TEXT,
             live_agent_transfer BOOLEAN,
             abandoned BOOLEAN,
             elead BOOLEAN
         );
 
-        -- 4. Create the call_subjects table
-        CREATE TABLE IF NOT EXISTS call_subjects (
+        -- 4. Create the vehicles table
+        CREATE TABLE IF NOT EXISTS vehicles (
             subject_id SERIAL PRIMARY KEY,
             call_id INTEGER REFERENCES calls(call_id) ON DELETE CASCADE,
             vehicle VARCHAR(100),
@@ -115,7 +116,7 @@ class PostgresConnector:
 
         -- 5. Create indexes for faster lookups
         CREATE INDEX IF NOT EXISTS idx_calls_customer_id ON calls (customer_id);
-        CREATE INDEX IF NOT EXISTS idx_call_subjects_call_id ON call_subjects (call_id);
+        CREATE INDEX IF NOT EXISTS idx_vehicles_call_id ON vehicles (call_id);
         """
         try:
             logger.info("Initializing database schema, if not exists...")
@@ -180,11 +181,12 @@ class PostgresConnector:
                            call_duration, 
                            sentiment,
                            artifacts,
+                           summary,
                            live_agent_transfer, 
                            abandoned, 
                            elead
                        )
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING call_id; \
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING call_id; \
                        """
 
             # Convert artifacts to json string
@@ -199,6 +201,7 @@ class PostgresConnector:
                 call_data.duration,
                 call_data.sentiment,
                 artifacts_json,
+                call_data.summary,
                 call_data.transferred,
                 call_data.abandoned,
                 call_data.e_lead
@@ -210,7 +213,7 @@ class PostgresConnector:
 
             # Insert the Call Subject using the call_id
             sql_subject = """
-                          INSERT INTO call_subjects (
+                          INSERT INTO vehicles (
                               call_id, 
                               vehicle, 
                               model, 
@@ -274,11 +277,12 @@ class PostgresConnector:
                     cl.call_duration,
                     cl.sentiment, \
                     cl.artifacts, \
+                    cl.summary, \
                     cl.live_agent_transfer,
                     cl.abandoned, \
                     cl.elead,
 
-                    -- Subject columns
+                    -- Vehicle columns
                     cs.vehicle, \
                     cs.model, \
                     cs.requirements,
@@ -289,7 +293,7 @@ class PostgresConnector:
                          JOIN \
                      customers c ON cl.customer_id = c.customer_id \
                          JOIN \
-                     call_subjects cs ON cl.call_id = cs.call_id
+                     vehicles cs ON cl.call_id = cs.call_id
                 ORDER BY cl.created_time DESC
                     LIMIT %s
                 OFFSET %s;

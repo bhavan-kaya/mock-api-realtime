@@ -25,6 +25,7 @@ class CustomerDataRequestModel(BaseModel):
                     "sid": "123456",
                     "duration": "07:23 Min",
                     "sentiment": "87%",
+                    "summary": "This is a summary of the conversation",
                     "artifacts": [
                         {
                             'file_name': 'recordings.mp3',
