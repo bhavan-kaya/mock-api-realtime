@@ -3,7 +3,7 @@ from fastapi import APIRouter, status, HTTPException, Query
 
 from app.models.appointment.appointment_request_model import AppointmentRequestModel
 from app.models.appointment.appointment_update_model import AppointmentUpdateModel
-from app.services.appointments_service import AppointmentService
+from app.services.appointments_service import appointment_service
 from app.exceptions import (
     AppointmentNotFoundError,
     AppointmentAlreadyExistsError,
@@ -41,12 +41,12 @@ async def create_appointment(appointment: AppointmentRequestModel):
         customer_data = appointment.model_dump(exclude_none=True)
 
         # Create the appointment
-        return await AppointmentService.create_appointment(customer_data)
+        return appointment_service.create_appointment(customer_data)
 
     except (AppointmentAlreadyExistsError, AppointmentDataError) as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
+            detail=e.detail
         )
     except Exception as e:
         raise HTTPException(
@@ -82,12 +82,12 @@ async def get_appointment_by_phone_number(
         decoded_phone = unquote(phone_number)
 
         # Get contact info from vector store
-        return await AppointmentService.get_appointment_by_phone_number(decoded_phone)
+        return appointment_service.get_appointment_by_phone_number(decoded_phone)
 
     except AppointmentNotFoundError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
+            detail=e.detail
         )
     except Exception as e:
         raise HTTPException(
@@ -122,12 +122,12 @@ async def update_appointment(appointment: AppointmentUpdateModel):
         customer_data = appointment.model_dump(exclude_none=True)
 
         # Update the appointment
-        return await AppointmentService.update_appointment(customer_data)
+        return appointment_service.update_appointment(customer_data)
 
     except (AppointmentNotFoundError, AppointmentDataError) as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
+            detail=e.detail
         )
     except Exception as e:
         raise HTTPException(
@@ -164,12 +164,12 @@ async def delete_appointment_by_phone_number(
         decoded_phone = unquote(phone_number)
 
         # Get contact info from vector store
-        return await AppointmentService.delete_appointment(decoded_phone)
+        return appointment_service.delete_appointment_by_phone_number(decoded_phone)
 
     except AppointmentNotFoundError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail={"detail": str(e.detail) if hasattr(e, 'detail') else str(e)}
+            detail=e.detail
         )
     except Exception as e:
         raise HTTPException(
