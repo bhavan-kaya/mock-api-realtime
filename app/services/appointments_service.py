@@ -1,235 +1,202 @@
-import json
-import uuid
-from typing import Dict, Any
+import logging
+from typing import Dict, Any, Optional
 
-from langchain_core.documents import Document
-
-from rag import pg_vector_db
+from app.services.db_service import PostgresClient
 from app.exceptions import (
     AppointmentNotFoundError,
     AppointmentAlreadyExistsError,
     AppointmentDataError
 )
+from singleton import SingletonMeta
 
 
-class AppointmentService:
-    @staticmethod
-    async def create_appointment(customer_data: Dict[str, Any]) -> Dict[str, str]:
+# Get logger
+logger = logging.getLogger(__name__)
+
+
+class AppointmentService(metaclass=SingletonMeta):
+    """
+    Service layer for managing appointments, handling business logic
+    and database operations.
+    """
+
+    def __init__(self):
+        self.db_client = PostgresClient()
+        self.table_name = "appointments"
+
+        # Initialize the db tables
+        self._initialize_db()
+
+    def _initialize_db(self):
         """
-        Create a new appointment.
+        Creates the 'appointments' table if it doesn't already exist.
+        The phone number is set to UNIQUE to help enforce requirement #1.
+        """
+        conn = self.db_client.connect()
+        if not conn:
+            logger.critical("Failed to connect to DB for initialization.")
+            return
 
-        Args:
-            customer_data: The appointment data
-
-        Returns:
-            dict: The created appointment ID and success message
-
-        Raises:
-            AppointmentAlreadyExistsError: If an appointment with this phone number already exists
-            AppointmentDataError: If there's an error creating the appointment
+        create_table_query = f"""
+        CREATE TABLE IF NOT EXISTS {self.table_name} (
+            id SERIAL PRIMARY KEY,
+            customer_name VARCHAR(255) NOT NULL,
+            customer_phone_number VARCHAR(50) NOT NULL UNIQUE,
+            appointment_date DATE NOT NULL,
+            appointment_time TIME NOT NULL,
+            vehicle_details TEXT,
+            service TEXT,
+            remarks TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
         """
         try:
-            # Get the customer phone number
-            phone_number = customer_data.get("customer_phone_number")
+            with conn.cursor() as cur:
+                cur.execute(create_table_query)
+            conn.commit()
+            logger.info(f"Table '{self.table_name}' initialized successfully.")
 
-            # Create filter
-            filter_criteria = {
-                "phone_number": phone_number,
-                "type": "appointment"
-            }
+        except Exception as e:
+            conn.rollback()
+            logger.critical(f"Error initializing table '{self.table_name}': {e}")
 
-            # Check for existing data
-            existing_appointments = pg_vector_db.similarity_search(
-                query="",
-                filter=filter_criteria,
-                k=1
-            )
-            if existing_appointments:
+        finally:
+            self.db_client.close()
+
+    def create_appointment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Creates a new appointment record.
+        """
+        self.db_client.connect()
+        try:
+            # Check for existing appointment
+            filters = {"customer_phone_number": data['customer_phone_number']}
+
+            existing_records = self.db_client.read(self.table_name, filters)
+            if existing_records:
+                logger.error(f"Error: Appointment already exists for phone {data['customer_phone_number']}")
                 raise AppointmentAlreadyExistsError(
-                    detail=f"An appointment already exists for phone number: {phone_number}"
+                    detail="An appointment with this phone number already exists!"
                 )
 
-            # Create the payload to save on the DB
-            customer_id = str(uuid.uuid4())
-
-            document = [
-                Document(
-                    page_content=json.dumps(customer_data),
-                    metadata={
-                        "id": customer_id,
-                        "phone_number": phone_number,
-                        "type": "appointment",
-                    },
+            # If no record, proceed with creation
+            record_id = self.db_client.create(self.table_name, data)
+            if not record_id:
+                logger.error(
+                    f"There was a problem creating an appointment for phone {data['customer_phone_number']}"
                 )
-            ]
+                raise AppointmentDataError(
+                    "There was a problem creating an appointment. Please try again later."
+                )
 
-            # Save to DB
-            pg_vector_db.add_documents(document)
-
-            return {
-                "id": customer_id,
-                "data": customer_data,
-                "status": "success"
-            }
+            # Fetch and return the newly created record
+            new_records = self.db_client.read(self.table_name, {"id": record_id})
+            logger.info(f"Successfully created record for {data['customer_phone_number']}")
+            return new_records[0]
 
         except (AppointmentAlreadyExistsError, AppointmentDataError):
             raise
         except Exception as e:
-            raise Exception(
-                f"Failed to create appointment: {str(e)}"
-            )
+            logger.info(f"Error creating record: {e}")
+            raise
 
-    @staticmethod
-    async def get_appointment_by_phone_number(phone_number: str) -> Dict[str, Any]:
+        finally:
+            self.db_client.close()
+
+    def get_appointment_by_phone_number(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve an appointment by phone number.
-
-        Args:
-            phone_number: The phone number to search for
-
-        Returns:
-            dict: The appointment data
-
-        Raises:
-            HTTPException: If appointment not found or an error occurs
+        Retrieves an appointment record based on the phone number.
         """
+        self.db_client.connect()
         try:
-            filter_criteria = {
-                "phone_number": phone_number,
-                "type": "appointment"
-            }
+            filters = {"customer_phone_number": phone_number}
 
-            results = pg_vector_db.similarity_search(
-                query="",
-                filter=filter_criteria,
-                k=1
-            )
-
-            if not results:
+            records = self.db_client.read(self.table_name, filters)
+            if not records:
+                logger.error(f"No record found for phone: {phone_number}")
                 raise AppointmentNotFoundError(
-                    detail=f"No appointment found for phone number: {phone_number}"
+                    detail="An appointment with this phone number does not exist!"
+                )
+            return records[0]
+
+        except AppointmentNotFoundError:
+            raise
+        except Exception as e:
+            logger.info(f"Error getting record: {e}")
+            raise
+
+        finally:
+            self.db_client.close()
+
+    def update_appointment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Updates an existing appointment record identified by phone number.
+        """
+        self.db_client.connect()
+        try:
+            phone_number = data['customer_phone_number']
+            update_filters = {"customer_phone_number": phone_number}
+
+            # Check if record exists
+            existing_records = self.db_client.read(self.table_name, update_filters)
+            if not existing_records:
+                logger.error(f"No appointment found for phone {phone_number} to update.")
+                raise AppointmentNotFoundError(
+                    detail="An appointment with this phone number does not exist!"
                 )
 
-            appointment_data = json.loads(results[0].page_content)
-            return {
-                "id": results[0].metadata.get("id"),
-                "data": appointment_data,
-                "status": "success"
-            }
+            # If record exists, proceed with update
+            success = self.db_client.update(self.table_name, data, update_filters)
+            if not success:
+                logger.error(f"There was a problem updating an appointment for phone {phone_number}.")
+                raise AppointmentDataError(
+                    detail="There was a problem updating an appointment. Please try again later."
+                )
+
+            # Fetch and return the updated record
+            updated_records = self.db_client.read(self.table_name, update_filters)
+            logger.info(f"Successfully updated record for {phone_number}")
+            return updated_records[0]
 
         except (AppointmentNotFoundError, AppointmentDataError):
             raise
         except Exception as e:
-            raise Exception(
-                f"Failed to retrieve appointment: {str(e)}"
-            )
+            logger.info(f"Error updating record: {e}")
+            raise
 
-    @staticmethod
-    async def update_appointment(customer_data: Dict[str, Any]) -> Dict[str, str]:
+        finally:
+            self.db_client.close()
+
+    def delete_appointment_by_phone_number(self, phone_number: str) -> Dict[str, str]:
         """
-        Update an existing appointment.
-
-        Args:
-            update_data: The data to update
-
-        Returns:
-            dict: Success message
-
-        Raises:
-            AppointmentNotFoundError: If appointment not found
-            AppointmentDataError: If there's an error updating the appointment
+        Deletes an appointment record based on the phone number.
         """
+        self.db_client.connect()
         try:
-            # Get the customer phone number
-            phone_number = customer_data.get("customer_phone_number")
+            filters = {"customer_phone_number": phone_number}
 
-            # Create a filter
-            filter_criteria = {
-                "phone_number": phone_number,
-                "type": "appointment"
-            }
-
-            # Check for existing data
-            results = pg_vector_db.similarity_search(
-                query="",
-                filter=filter_criteria,
-                k=1
-            )
-            if not results:
+            success = self.db_client.delete(self.table_name, filters)
+            if not success:
+                logger.error(f"No appointment found for phone {phone_number} to update.")
                 raise AppointmentNotFoundError(
-                    detail=f"No appointment found for phone number: {phone_number}"
+                    detail="An appointment with this phone number does not exist!"
                 )
 
-            # Create the updated customer data object
-            doc_id = results[0].metadata["id"]
-            updated_doc = Document(
-                page_content=json.dumps(customer_data),
-                metadata={
-                    "id": doc_id,
-                    "phone_number": phone_number,
-                    "type": "appointment",
-                },
-            )
-
-            pg_vector_db.add_documents([updated_doc])
+            logger.info(f"No record found to delete for phone: {phone_number}")
             return {
-                "id": doc_id,
-                "data": customer_data,
-                "status": "success"
+                'phone_number': phone_number,
+                'deleted': success,
+                'status': 'success' if success else 'failed'
             }
 
-        except (AppointmentNotFoundError, AppointmentDataError):
+        except AppointmentNotFoundError:
             raise
         except Exception as e:
-            raise Exception(
-                f"Failed to update appointment: {str(e)}"
-            )
-
-    @staticmethod
-    async def delete_appointment(phone_number: str) -> Dict[str, str]:
-        """
-        Deletes an existing appointment.
-
-        Args:
-            phone_number: The phone number to delete for
-
-        Returns:
-            dict: Success message
-
-        Raises:
-            AppointmentNotFoundError: If appointment not found
-            AppointmentDataError: If there's an error deleting the appointment
-        """
-        try:
-            # Create a filter
-            filter_criteria = {
-                "phone_number": phone_number,
-                "type": "appointment"
-            }
-
-            # Check for existing data
-            results = pg_vector_db.similarity_search(
-                query="",
-                filter=filter_criteria,
-                k=1
-            )
-            if not results:
-                raise AppointmentNotFoundError(
-                    detail=f"No appointment found for phone number: {phone_number}"
-                )
-
-            # Delete the customer data from the DB
-            doc_id = results[0].metadata["id"]
-            pg_vector_db.delete_documents([doc_id])
-
-            return {
-                "id": doc_id,
-                "status": "success"
-            }
-
-        except (AppointmentNotFoundError, AppointmentDataError):
+            logger.info(f"Error deleting record: {e}")
             raise
-        except Exception as e:
-            raise Exception(
-                f"Failed to delete appointment: {str(e)}"
-            )
+
+        finally:
+            self.db_client.close()
+
+
+appointment_service = AppointmentService()
