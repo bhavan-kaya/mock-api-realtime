@@ -39,13 +39,13 @@ class AppointmentService(metaclass=SingletonMeta):
 
         create_table_query = f"""
         CREATE TABLE IF NOT EXISTS {self.table_name} (
-            id SERIAL PRIMARY KEY,
+            id UUID PRIMARY KEY,
             customer_name VARCHAR(255) NOT NULL,
-            customer_phone_number VARCHAR(50) NOT NULL UNIQUE,
+            customer_phone_number VARCHAR(20) NOT NULL UNIQUE,
             appointment_date DATE NOT NULL,
             appointment_time TIME NOT NULL,
-            vehicle_details TEXT,
-            service TEXT,
+            vehicle_details VARCHAR(255),
+            service VARCHAR(255),
             remarks TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
