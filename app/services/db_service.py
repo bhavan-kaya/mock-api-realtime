@@ -2,15 +2,16 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import List, Dict, Any, Optional
 import os
+from config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT
 
 
 class PostgresClient:
     def __init__(self):
-        self.host = os.getenv("DB_HOST", "localhost")
-        self.database = os.getenv("DB_NAME", "voice-demo")
-        self.user = os.getenv("DB_USER", "postgres")
-        self.password = os.getenv("DB_PASSWORD", "Lahiru1997")
-        self.port = os.getenv("DB_PORT", "5432")
+        self.host = DB_HOST
+        self.database = DB_NAME
+        self.user = DB_USER
+        self.password = DB_PASSWORD
+        self.port = DB_PORT
         self.conn = None
     
     def connect(self):
