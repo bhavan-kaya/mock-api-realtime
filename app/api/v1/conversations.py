@@ -35,7 +35,7 @@ async def get_conversation_data(
         CustomerDataResponseModel: The conversation artifacts from the database
     """
     try:
-        conversation_data = await conversation_service.get_conversation_data(
+        conversation_data = conversation_service.get_conversation_data(
             page=page,
             per_page=per_page
         )
@@ -61,7 +61,11 @@ async def save_conversation_data(call_data: CustomerDataRequestModel):
         CustomerResponseModel: Customer ID with the request status
     """
     try:
-        customer_id = await conversation_service.save_conversation_data(call_data)
+        customer_id = conversation_service.save_conversation_data(
+            customer_data=call_data.customer_data,
+            call_data=call_data.call_data,
+            vehicle_data=call_data.vehicle_data
+        )
         return CustomerResponseModel(
             customer_id=customer_id,
             status=ResponseStatus.SUCCESS

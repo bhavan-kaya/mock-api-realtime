@@ -14,15 +14,18 @@ from singleton import SingletonMeta
 logger = logging.getLogger(__name__)
 
 
+# Define the DB table name
+TABLE_NAME = "appointments"
+
+
 class AppointmentService(metaclass=SingletonMeta):
     """
     Service layer for managing appointments, handling business logic
     and database operations.
     """
-
     def __init__(self):
         self.db_client = PostgresClient()
-        self.table_name = "appointments"
+        self.table_name = TABLE_NAME
 
         # Initialize the db tables
         self._initialize_db()
@@ -32,25 +35,28 @@ class AppointmentService(metaclass=SingletonMeta):
         Creates the 'appointments' table if it doesn't already exist.
         The phone number is set to UNIQUE to help enforce requirement #1.
         """
-        conn = self.db_client.connect()
-        if not conn:
-            logger.critical("Failed to connect to DB for initialization.")
-            return
-
-        create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {self.table_name} (
-            id UUID PRIMARY KEY,
-            customer_name VARCHAR(255) NOT NULL,
-            customer_phone_number VARCHAR(20) NOT NULL UNIQUE,
-            appointment_date DATE NOT NULL,
-            appointment_time TIME NOT NULL,
-            vehicle_details VARCHAR(255),
-            service VARCHAR(255),
-            remarks TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        """
+        conn = None
         try:
+            logger.info("Initializing database schema, if not exists...")
+            conn = self.db_client.connect()
+            if not conn:
+                logger.critical("Failed to connect to DB for initialization.")
+                return
+
+            create_table_query = f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                id UUID PRIMARY KEY,
+                customer_name VARCHAR(255) NOT NULL,
+                customer_phone_number VARCHAR(20) NOT NULL UNIQUE,
+                appointment_date DATE NOT NULL,
+                appointment_time TIME NOT NULL,
+                vehicle_details VARCHAR(255),
+                service VARCHAR(255),
+                remarks TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+
             with conn.cursor() as cur:
                 cur.execute(create_table_query)
             conn.commit()
@@ -61,7 +67,8 @@ class AppointmentService(metaclass=SingletonMeta):
             logger.critical(f"Error initializing table '{self.table_name}': {e}")
 
         finally:
-            self.db_client.close()
+            if conn:
+                conn.close()
 
     def create_appointment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
