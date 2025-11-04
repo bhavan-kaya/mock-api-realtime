@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from app.services.db_service import PostgresClient
 from app.exceptions import (
@@ -167,7 +167,7 @@ class AppointmentService(metaclass=SingletonMeta):
         finally:
             self.db_client.close()
 
-    def delete_appointment_by_phone_number(self, phone_number: str) -> bool:
+    def delete_appointment_by_phone_number(self, phone_number: str) -> Dict[str, str]:
         """
         Deletes an appointment record based on the phone number.
         """
@@ -183,7 +183,11 @@ class AppointmentService(metaclass=SingletonMeta):
                 )
 
             logger.info(f"No record found to delete for phone: {phone_number}")
-            return success
+            return {
+                'phone_number': phone_number,
+                'deleted': success,
+                'status': 'success' if success else 'failed'
+            }
 
         except AppointmentNotFoundError:
             raise
