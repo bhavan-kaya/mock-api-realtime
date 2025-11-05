@@ -1,14 +1,20 @@
 from urllib.parse import unquote
+
 from fastapi import APIRouter, status, HTTPException, Query
 
+from app.models.enum.response_status import ResponseStatus
+from app.exceptions import AppointmentException
+from app.exceptions.database.database_connection_exception import DatabaseConnectionException
 from app.models.appointment.appointment_request_model import AppointmentRequestModel
 from app.models.appointment.appointment_update_model import AppointmentUpdateModel
-from app.services.appointments_service import appointment_service
-from app.exceptions import (
-    AppointmentNotFoundError,
-    AppointmentAlreadyExistsError,
-    AppointmentDataError
+from app.models.appointment.appointment_response_model import (
+    CreateAppointmentResponse,
+    GetAppointmentByPhoneNumberResponse,
+    UpdateAppointmentResponse,
+    DeleteAppointmentResponse
 )
+from app.services.appointments_service import appointment_service
+
 
 # Initialize the router
 router = APIRouter(prefix="/appointments")
@@ -21,7 +27,8 @@ router = APIRouter(prefix="/appointments")
         409: {"description": "Appointment already exists"},
         422: {"description": "Invalid appointment data"},
         500: {"description": "Internal server error"}
-    }
+    },
+    response_model=CreateAppointmentResponse
 )
 async def create_appointment(appointment: AppointmentRequestModel):
     """
@@ -41,9 +48,14 @@ async def create_appointment(appointment: AppointmentRequestModel):
         customer_data = appointment.model_dump(exclude_none=True)
 
         # Create the appointment
-        return appointment_service.create_appointment(customer_data)
+        appointment_id = appointment_service.create_appointment(customer_data)
+        return CreateAppointmentResponse(
+            appointment_id=appointment_id,
+            data=data,
+            status=ResponseStatus.SUCCESS
+        )
 
-    except (AppointmentAlreadyExistsError, AppointmentDataError) as e:
+    except (AppointmentException, DatabaseConnectionException) as e:
         raise HTTPException(
             status_code=e.status_code,
             detail=e.detail
@@ -60,7 +72,8 @@ async def create_appointment(appointment: AppointmentRequestModel):
         400: {"description": "Invalid phone number format"},
         404: {"description": "Appointment not found"},
         500: {"description": "Internal server error"}
-    }
+    },
+    response_model=GetAppointmentByPhoneNumberResponse
 )
 async def get_appointment_by_phone_number(
     phone_number: str = Query(..., description="Customer phone number")
@@ -82,9 +95,19 @@ async def get_appointment_by_phone_number(
         decoded_phone = unquote(phone_number)
 
         # Get contact info from vector store
-        return appointment_service.get_appointment_by_phone_number(decoded_phone)
+        appointment_data = appointment_service.get_appointment_by_phone_number(decoded_phone)
 
-    except AppointmentNotFoundError as e:
+        # Prepare the payload
+        appointment_id = appointment_data['id']
+        del appointment_data['id']
+
+        return GetAppointmentByPhoneNumberResponse(
+            appointment_id=appointment_id,
+            data=appointment_data,
+            status=ResponseStatus.SUCCESS
+        )
+
+    except (AppointmentException, DatabaseConnectionException) as e:
         raise HTTPException(
             status_code=e.status_code,
             detail=e.detail
@@ -101,7 +124,8 @@ async def get_appointment_by_phone_number(
         404: {"description": "Appointment not found"},
         422: {"description": "Invalid appointment data"},
         500: {"description": "Internal server error"}
-    }
+    },
+    response_model=UpdateAppointmentResponse
 )
 async def update_appointment(appointment: AppointmentUpdateModel):
     """
@@ -122,9 +146,16 @@ async def update_appointment(appointment: AppointmentUpdateModel):
         customer_data = appointment.model_dump(exclude_none=True)
 
         # Update the appointment
-        return appointment_service.update_appointment(customer_data)
+        updated = appointment_service.update_appointment(customer_data)
+        response_status = ResponseStatus.SUCCESS if updated else ResponseStatus.FAILED
 
-    except (AppointmentNotFoundError, AppointmentDataError) as e:
+        return UpdateAppointmentResponse(
+            updated=updated,
+            data=customer_data,
+            status=response_status
+        )
+
+    except (AppointmentException, DatabaseConnectionException) as e:
         raise HTTPException(
             status_code=e.status_code,
             detail=e.detail
@@ -142,7 +173,8 @@ async def update_appointment(appointment: AppointmentUpdateModel):
         400: {"description": "Invalid phone number format"},
         404: {"description": "Appointment not found"},
         500: {"description": "Internal server error"}
-    }
+    },
+    response_model=DeleteAppointmentResponse
 )
 async def delete_appointment_by_phone_number(
         phone_number: str = Query(..., description="Customer phone number")
@@ -164,9 +196,16 @@ async def delete_appointment_by_phone_number(
         decoded_phone = unquote(phone_number)
 
         # Get contact info from vector store
-        return appointment_service.delete_appointment_by_phone_number(decoded_phone)
+        success = appointment_service.delete_appointment_by_phone_number(decoded_phone)
+        response_status = ResponseStatus.SUCCESS if success else ResponseStatus.FAILED
 
-    except AppointmentNotFoundError as e:
+        return DeleteAppointmentResponse(
+            phone_number=phone_number,
+            deleted=success,
+            status=response_status
+        )
+
+    except (AppointmentException, DatabaseConnectionException) as e:
         raise HTTPException(
             status_code=e.status_code,
             detail=e.detail

@@ -1,12 +1,16 @@
 import logging
-from typing import Dict, Any, Optional
+import psycopg2
 
-from app.services.db_service import PostgresClient
-from app.exceptions import (
+from typing import Dict, Any, Optional
+from psycopg2.errors import UniqueViolation
+
+from app.exceptions.appointment.appointment_exceptions import (
     AppointmentNotFoundError,
-    AppointmentAlreadyExistsError,
-    AppointmentDataError
+    AppointmentAlreadyExistsError
 )
+from app.exceptions.database.database_connection_exception import DatabaseConnectionException
+from app.exceptions.database.database_initialization_exception import DatabaseInitializationException
+from app.services.db_service import PostgresClient
 from singleton import SingletonMeta
 
 
@@ -37,11 +41,12 @@ class AppointmentService(metaclass=SingletonMeta):
         """
         conn = None
         try:
-            logger.info("Initializing database schema, if not exists...")
+            logger.info(f"Initializing database schema for {self.table_name}...")
             conn = self.db_client.connect()
             if not conn:
-                logger.critical("Failed to connect to DB for initialization.")
-                return
+                raise DatabaseInitializationException(
+                    detail="Failed to connect to DB."
+                )
 
             create_table_query = f"""
             CREATE TABLE IF NOT EXISTS {self.table_name} (
@@ -62,9 +67,19 @@ class AppointmentService(metaclass=SingletonMeta):
             conn.commit()
             logger.info(f"Table '{self.table_name}' initialized successfully.")
 
+        except psycopg2.Error as ex:
+            if conn:
+                conn.rollback()
+            logger.error(f'Error while creating table for table:{self.table_name}: {str(ex)}')
+            raise DatabaseInitializationException(
+                detail=f'There was an error during schema initialization for table:{self.table_name}: {str(ex)}'
+            )
         except Exception as e:
-            conn.rollback()
-            logger.critical(f"Error initializing table '{self.table_name}': {e}")
+            error_message = (
+                f"There was an error during schema initialization for table:{self.table_name}: {str(e)}"
+            )
+            logger.error(error_message)
+            raise DatabaseInitializationException(detail=error_message)
 
         finally:
             if conn:
@@ -74,136 +89,191 @@ class AppointmentService(metaclass=SingletonMeta):
         """
         Creates a new appointment record.
         """
-        self.db_client.connect()
+        conn = None
         try:
-            # Check for existing appointment
-            filters = {"customer_phone_number": data['customer_phone_number']}
+            # Connect to the DB
+            conn = self.db_client
+            conn.connect()
+            if not conn:
+                raise DatabaseConnectionException(detail="Could not connect to database.")
 
-            existing_records = self.db_client.read(self.table_name, filters)
-            if existing_records:
-                logger.error(f"Error: Appointment already exists for phone {data['customer_phone_number']}")
-                raise AppointmentAlreadyExistsError(
-                    detail="An appointment with this phone number already exists!"
-                )
-
-            # If no record, proceed with creation
-            record_id = self.db_client.create(self.table_name, data)
-            if not record_id:
-                logger.error(
-                    f"There was a problem creating an appointment for phone {data['customer_phone_number']}"
-                )
-                raise AppointmentDataError(
-                    "There was a problem creating an appointment. Please try again later."
-                )
-
-            # Fetch and return the newly created record
-            new_records = self.db_client.read(self.table_name, {"id": record_id})
+            # Perform the create operation
+            appointment_id = conn.create(self.table_name, data)
             logger.info(f"Successfully created record for {data['customer_phone_number']}")
-            return new_records[0]
+            return appointment_id
 
-        except (AppointmentAlreadyExistsError, AppointmentDataError):
-            raise
+        except UniqueViolation:
+            # Rollback the changes
+            if conn:
+                conn.rollback()
+            error_message = f"Error: Appointment already exists for phone {data['customer_phone_number']}"
+            logger.error(error_message)
+            raise AppointmentAlreadyExistsError(detail=error_message)
+
+        except (DatabaseConnectionException, psycopg2.Error) as e:
+            # Rollback the changes
+            if conn:
+                conn.rollback()
+            error_message = f"There was a DB error occurred during establishing the connection: {str(e)}"
+            logger.error(error_message)
+            raise DatabaseConnectionException(detail=error_message)
+
         except Exception as e:
-            logger.info(f"Error creating record: {e}")
+            # Rollback the changes
+            if conn:
+                conn.rollback()
+            logger.error(f"There was an error occurred while creating an appointment: {str(e)}")
             raise
 
         finally:
-            self.db_client.close()
+            if conn:
+                conn.close()
 
     def get_appointment_by_phone_number(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """
         Retrieves an appointment record based on the phone number.
         """
-        self.db_client.connect()
+        conn = None
         try:
+            # Connect to the DB
+            conn = self.db_client
+            conn.connect()
+            if not conn:
+                raise DatabaseConnectionException(detail="Could not connect to database.")
+
+            # Create filters using the phone number
             filters = {"customer_phone_number": phone_number}
 
-            records = self.db_client.read(self.table_name, filters)
+            # Perform the GET operation
+            records = conn.read(self.table_name, filters)
             if not records:
-                logger.error(f"No record found for phone: {phone_number}")
                 raise AppointmentNotFoundError(
-                    detail="An appointment with this phone number does not exist!"
+                    detail=f"Phone: {phone_number} does not have any appointments"
                 )
             return records[0]
 
-        except AppointmentNotFoundError:
+        except (DatabaseConnectionException, psycopg2.Error) as e:
+            error_message = (
+                f"There was an error establishing connection to the DB during fetching an appointment "
+                f"by phone number {phone_number}: {str(e)}"
+            )
+            logger.error(error_message)
+            raise DatabaseConnectionException(error_message)
+
+        except AppointmentNotFoundError as e:
+            logger.error(
+                f"There was an error occurred while fetching an appointment : {str(e)}"
+            )
             raise
+
         except Exception as e:
-            logger.info(f"Error getting record: {e}")
+            logger.error(
+                f"There was an error occurred while fetching appointment by phone number {phone_number}: {str(e)}"
+            )
             raise
 
         finally:
-            self.db_client.close()
+            if conn:
+                conn.close()
 
-    def update_appointment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_appointment(self, data: Dict[str, Any]) -> Optional[bool]:
         """
         Updates an existing appointment record identified by phone number.
         """
-        self.db_client.connect()
+        conn = None
         try:
+            # Connect to the DB
+            conn = self.db_client
+            conn.connect()
+            if not conn:
+                raise DatabaseConnectionException(detail="Could not connect to database.")
+
+            # Create filters using the phone number
             phone_number = data['customer_phone_number']
-            update_filters = {"customer_phone_number": phone_number}
+            filters = {"customer_phone_number": phone_number}
 
-            # Check if record exists
-            existing_records = self.db_client.read(self.table_name, update_filters)
-            if not existing_records:
-                logger.error(f"No appointment found for phone {phone_number} to update.")
+            # Perform the update operation
+            updated_record = self.db_client.update(
+                table=self.table_name,
+                data=data,
+                filters=filters
+            )
+            if not updated_record:
                 raise AppointmentNotFoundError(
-                    detail="An appointment with this phone number does not exist!"
+                    detail=f"Phone: {phone_number} does not have any appointments to update with."
                 )
+            return True
 
-            # If record exists, proceed with update
-            success = self.db_client.update(self.table_name, data, update_filters)
-            if not success:
-                logger.error(f"There was a problem updating an appointment for phone {phone_number}.")
-                raise AppointmentDataError(
-                    detail="There was a problem updating an appointment. Please try again later."
-                )
+        except (DatabaseConnectionException, psycopg2.Error) as e:
+            error_message = (
+                f"There was an error establishing connection to the DB during updating an appointment: {str(e)}"
+            )
+            logger.error(error_message)
+            raise DatabaseConnectionException(error_message)
 
-            # Fetch and return the updated record
-            updated_records = self.db_client.read(self.table_name, update_filters)
-            logger.info(f"Successfully updated record for {phone_number}")
-            return updated_records[0]
-
-        except (AppointmentNotFoundError, AppointmentDataError):
+        except AppointmentNotFoundError as e:
+            logger.error(
+                f"There was an error occurred while updating an appointment: {str(e)}"
+            )
             raise
+
         except Exception as e:
-            logger.info(f"Error updating record: {e}")
+            logger.error(
+                f"There was an error occurred while updating an appointment: {str(e)}"
+            )
             raise
 
         finally:
-            self.db_client.close()
+            if conn:
+                conn.close()
 
-    def delete_appointment_by_phone_number(self, phone_number: str) -> Dict[str, str]:
+    def delete_appointment_by_phone_number(self, phone_number: str) -> bool:
         """
         Deletes an appointment record based on the phone number.
         """
-        self.db_client.connect()
+        conn = None
         try:
+            # Connect to the DB
+            conn = self.db_client
+            conn.connect()
+            if not conn:
+                raise DatabaseConnectionException(detail="Could not connect to database.")
+
+            # Create filters using the phone number
             filters = {"customer_phone_number": phone_number}
 
-            success = self.db_client.delete(self.table_name, filters)
+            # Perform the delete operation
+            success = conn.delete(
+                table=self.table_name,
+                filters=filters
+            )
             if not success:
-                logger.error(f"No appointment found for phone {phone_number} to update.")
                 raise AppointmentNotFoundError(
-                    detail="An appointment with this phone number does not exist!"
+                    detail=f"Phone: {phone_number} does not have any appointments to delete."
                 )
 
-            logger.info(f"No record found to delete for phone: {phone_number}")
-            return {
-                'phone_number': phone_number,
-                'deleted': success,
-                'status': 'success' if success else 'failed'
-            }
+            return success
 
-        except AppointmentNotFoundError:
+        except (DatabaseConnectionException, psycopg2.Error) as e:
+            error_message = (
+                f"There was an error establishing connection to the DB during deleting an appointment: {str(e)}"
+            )
+            logger.error(error_message)
+            raise DatabaseInitializationException(error_message)
+
+        except AppointmentNotFoundError as e:
+            logger.error(
+                f"There was an error occurred while deleting an appointment: {str(e)}"
+            )
             raise
+
         except Exception as e:
-            logger.info(f"Error deleting record: {e}")
+            logger.error(f"There was an error occurred while deleting an appointment: {str(e)}")
             raise
 
         finally:
-            self.db_client.close()
+            if conn:
+                conn.close()
 
 
 appointment_service = AppointmentService()

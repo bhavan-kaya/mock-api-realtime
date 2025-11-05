@@ -22,5 +22,5 @@ for module_info in pkgutil.iter_modules([str(endpoints_dir_path)]):
             # Using the filename as a tag for better documentation in Swagger UI.
             api_v1_router.include_router(
                 module.router,
-                tags=[module_info.name]
+                tags=[module_info.name.capitalize()]
             )

@@ -1,11 +1,13 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 
+from app.models.conversation.customer_data_request_model import CustomerDataRequestModel
 from app.models.enum.response_status import ResponseStatus
 
 
 class CustomerResponseModel(BaseModel):
     customer_id: int
+    data: CustomerDataRequestModel
     status: ResponseStatus
 
 
@@ -17,6 +19,6 @@ class MetadataModel(BaseModel):
 
 
 class CustomerDataResponseModel(BaseModel):
-    data: List[Dict[str, Any]]
+    data: List[CustomerDataRequestModel]
     metadata: MetadataModel
     status: ResponseStatus

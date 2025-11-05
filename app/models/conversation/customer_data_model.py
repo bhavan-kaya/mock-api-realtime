@@ -1,97 +1,170 @@
 import re
-from datetime import datetime
-from typing import List
+from datetime import datetime, time
+from typing import List, Dict, Any
 
-from pydantic import BaseModel, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from app.models.conversation.file_data_model import FileData
 from app.models.enum.customer_type import CustomerType
 
 
-class CustomerDataModel(BaseModel):
-    first_name: str
-    phone_number: str
-    customer_type: CustomerType
+class CoreModel(BaseModel):
+    """Base model with standard configuration."""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        extra='ignore'
+    )
+
+class CustomerDataModel(CoreModel):
+    first_name: str = Field(
+        ..., 
+        min_length=1, 
+        description="Customer's first name."
+    )
+    phone_number: str = Field(
+        ..., 
+        min_length=7, 
+        max_length=20, 
+        description="Primary contact number."
+    )
+    customer_type: CustomerType = Field(
+        ..., 
+        description="Classification of the customer."
+    )
 
     @field_validator('first_name')
     @classmethod
-    def validate_first_name(cls, v: str) -> str:
-        """Validate that first_name is not empty and contains only letters/spaces."""
-        stripped_v = v.strip()
-        if not stripped_v:
-            raise ValueError('First name must not be empty.')
-        if not re.match(r'^[a-zA-Z\s]+$', stripped_v):
-            raise ValueError('First name must contain only letters and spaces.')
-        return stripped_v
-
-    @field_validator('phone_number')
-    @classmethod
-    def validate_phone_number(cls, v: str) -> str:
-        """Validate phone number format"""
-        stripped_phone_number = v.strip()
-        if not stripped_phone_number:
-            raise ValueError('Phone number must not be empty.')
-        return stripped_phone_number
-
-
-class CallDataModel(BaseModel):
-    created_time: str
-    sid: str
-    duration: str
-    sentiment: str
-    artifacts: List[FileData]
-    summary: str
-    transferred: bool
-    abandoned: bool
-    e_lead: bool
-
-    @field_validator('created_time')
-    @classmethod
-    def validate_created_time(cls, v: str) -> str:
-        """Validate that created_time is a valid ISO 8601 datetime string."""
-        try:
-            # This checks if the string can be parsed as an ISO datetime
-            datetime.fromisoformat(v)
-        except ValueError:
-            raise ValueError('created_time must be in ISO 8601 format (e.g., YYYY-MM-DDTHH:MM:SS).')
+    def validate_name_characters(cls, v: str) -> str:
+        if not re.match(r"^[a-zA-Z\s\-.]+$", v):
+            raise ValueError("First name contains invalid characters.")
         return v
 
-    @field_validator('sentiment', 'duration', 'sid')
+class CallDataModel(CoreModel):
+    created_time: datetime = Field(
+        ..., 
+        description="Timestamp when the call record was created."
+    )
+    sid: str = Field(
+        ..., 
+        min_length=5, 
+        max_length=50, 
+        description="Unique session/call ID."
+    )
+    duration: time = Field(
+        ..., 
+        description="Total duration of the call."
+    )
+    artifacts: List[FileData] = Field(
+        default_factory=list, 
+        description="Associated files like recordings or transcripts."
+    )
+    live_agent_transfer: bool = Field(
+        False, 
+        description="Whether the call was transferred to a human agent."
+    )
+    abandoned: bool = Field(
+        False, 
+        description="Whether the caller hung up before resolution."
+    )
+    e_lead: bool = Field(False, description="Whether this call qualified as an electronic lead.")
+
+    @field_validator('sid')
     @classmethod
-    def validate_not_empty(cls, v: str, info: ValidationInfo) -> str:
-        """Validate that the field is not empty."""
-        stripped_v = v.strip()
-        if not stripped_v:
-            raise ValueError(f'{info.field_name} must not be empty.')
-        return stripped_v
+    def validate_sid_format(cls, v: str) -> str:
+        if not re.match(r'^[A-Za-z0-9_\-]+$', v):
+            raise ValueError("SID contains invalid characters.")
+        return v
 
 
-class VehicleDataModel(BaseModel):
-    vehicle: str
-    model: str
-    requirements: List[str]
-
-    @field_validator('vehicle', 'model')
-    @classmethod
-    def validate_not_empty(cls, v: str, info: ValidationInfo) -> str:
-        """Validate that vehicle and model fields are not empty."""
-        stripped_v = v.strip()
-        if not stripped_v:
-            raise ValueError(f'{info.field_name} must not be empty.')
-        return stripped_v
+class VehicleDataModel(CoreModel):
+    vehicle: str = Field(
+        ..., 
+        min_length=1, 
+        description="Vehicle make (e.g., Toyota)."
+    )
+    model: str = Field(
+        ..., 
+        min_length=1, 
+        description="Vehicle model (e.g., Corolla)."
+    )
+    requirements: List[str] = Field(
+        ..., 
+        min_length=1, 
+        description="Specific customer vehicle requirements."
+    )
 
     @field_validator('requirements')
     @classmethod
-    def validate_requirements(cls, v: List[str]) -> List[str]:
-        """Validate that the requirements list is not empty and its items are not empty."""
-        if not v:
-            raise ValueError('Requirements list must not be empty.')
+    def validate_requirements_items(cls, v: List[str]) -> List[str]:
+        # Remove empty strings from the list
+        cleaned = [item.strip() for item in v if item.strip()]
+        if not cleaned:
+             raise ValueError('Requirements list must contain at least one valid item.')
+        return cleaned
 
-        validated_list = []
-        for item in v:
-            stripped_item = item.strip()
-            if not stripped_item:
-                raise ValueError('Requirement item must not be empty.')
-            validated_list.append(stripped_item)
+class ConversationSummaryModel(CoreModel):
+    summary: str = Field(
+        ..., 
+        min_length=10, 
+        description="High-level summary of the conversation."
+    )
+    intent: str = Field(
+        ..., 
+        min_length=1, 
+        description="Detected primary intent of the caller."
+    )
+    resolution: str = Field(
+        ..., 
+        min_length=1, 
+        description="How the call was resolved."
+    )
+    escalation: str = Field(
+        default="",
+        min_length=0,
+        description="Details if the call was escalated."
+    )
+    next_steps: str = Field(
+        ..., 
+        min_length=1, 
+        description="Action items following the call."
+    )
+    flags: List[str] = Field(
+        default_factory=list, 
+        description="Urgent markers (e.g., 'angry customer')."
+    )
+    tags: List[str] = Field(
+        default_factory=list, 
+        description="Categorization tags for reporting."
+    )
+    average_handle_time: List[Dict[str, Any]] = Field(
+        default_factory=list, 
+        description="Metrics on handle time components."
+    )
 
-        return validated_list
+class SentimentDataModel(CoreModel):
+    score: float = Field(
+        ..., 
+        ge=0, 
+        le=100, 
+        description="AI-calculated sentiment score (0-100)."
+    )
+    tone_summary: str = Field(
+        ..., 
+        min_length=1, 
+        description="Brief description of the caller's tone."
+    )
+    ai_interpretation: str = Field(
+        ..., 
+        min_length=10, 
+        description="AI's detailed analysis of the sentiment."
+    )
+    emotion_breakdown: List[Dict[str, Any]] = Field(
+        default_factory=list, 
+        description="Granular scoring of specific emotions."
+    )
+    key_phrases: List[str] = Field(
+        default_factory=list, 
+        description="Notable phrases used by the customer indicating sentiment."
+    )
+    
