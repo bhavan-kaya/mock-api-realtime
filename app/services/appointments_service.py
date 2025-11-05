@@ -96,8 +96,8 @@ class AppointmentService(metaclass=SingletonMeta):
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
             # Insert appointment using explicit SQL
-            sql_query = """
-                        INSERT INTO appointments (
+            sql_query = f"""
+                        INSERT INTO {self.table_name} (
                             customer_name, \
                             customer_phone_number, \
                             appointment_date, \
@@ -165,7 +165,7 @@ class AppointmentService(metaclass=SingletonMeta):
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
             # Select appointment using explicit SQL
-            sql_query = """
+            sql_query = f"""
                         SELECT id, \
                                customer_name, \
                                customer_phone_number, \
@@ -173,9 +173,8 @@ class AppointmentService(metaclass=SingletonMeta):
                                appointment_time, \
                                vehicle_details, \
                                service, \
-                               remarks, \
-                               created_at
-                        FROM appointments
+                               remarks
+                        FROM {self.table_name}
                         WHERE customer_phone_number = %s; \
                         """
 
@@ -246,7 +245,7 @@ class AppointmentService(metaclass=SingletonMeta):
 
             # Formulate the SQL query
             sql_query = f"""
-                UPDATE appointments
+                UPDATE {self.table_name}
                 SET {', '.join(update_fields)}
                 WHERE customer_phone_number = %s
                 RETURNING id;
@@ -307,9 +306,9 @@ class AppointmentService(metaclass=SingletonMeta):
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
             # Delete appointment using explicit SQL
-            sql_query = """
+            sql_query = f"""
                         DELETE \
-                        FROM appointments
+                        FROM {self.table_name}
                         WHERE customer_phone_number = %s RETURNING id; \
                         """
 
