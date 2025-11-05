@@ -97,13 +97,15 @@ class AppointmentService(metaclass=SingletonMeta):
 
             # Insert appointment using explicit SQL
             sql_query = """
-                        INSERT INTO appointments (customer_name, \
-                                                  customer_phone_number, \
-                                                  appointment_date, \
-                                                  appointment_time, \
-                                                  vehicle_details, \
-                                                  service, \
-                                                  remarks)
+                        INSERT INTO appointments (
+                            customer_name, \
+                            customer_phone_number, \
+                            appointment_date, \
+                            appointment_time, \
+                            vehicle_details, \
+                            service, \
+                            remarks
+                        )
                         VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id; \
                         """
 
