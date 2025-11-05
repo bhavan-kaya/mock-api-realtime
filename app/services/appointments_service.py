@@ -2,6 +2,7 @@ import logging
 import psycopg2
 
 from typing import Dict, Any, Optional
+from psycopg2.extras import DictCursor
 from psycopg2.errors import UniqueViolation
 
 from app.exceptions.appointment.appointment_exceptions import (
@@ -16,7 +17,6 @@ from singleton import SingletonMeta
 
 # Get logger
 logger = logging.getLogger(__name__)
-
 
 # Define the DB table name
 TABLE_NAME = "appointments"
@@ -37,7 +37,6 @@ class AppointmentService(metaclass=SingletonMeta):
     def _initialize_db(self):
         """
         Creates the 'appointments' table if it doesn't already exist.
-        The phone number is set to UNIQUE to help enforce requirement #1.
         """
         conn = None
         try:
@@ -85,20 +84,43 @@ class AppointmentService(metaclass=SingletonMeta):
             if conn:
                 conn.close()
 
-    def create_appointment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def create_appointment(self, data: Dict[str, Any]) -> Optional[str]:
         """
         Creates a new appointment record.
         """
         conn = None
         try:
             # Connect to the DB
-            conn = self.db_client
-            conn.connect()
+            conn = self.db_client.connect()
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
-            # Perform the create operation
-            appointment_id = conn.create(self.table_name, data)
+            # Insert appointment using explicit SQL
+            sql_query = """
+                        INSERT INTO appointments (customer_name, \
+                                                  customer_phone_number, \
+                                                  appointment_date, \
+                                                  appointment_time, \
+                                                  vehicle_details, \
+                                                  service, \
+                                                  remarks)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id; \
+                        """
+
+            # Execute the query
+            with conn.cursor() as cur:
+                cur.execute(sql_query, (
+                    data.get('customer_name'),
+                    data.get('customer_phone_number'),
+                    data.get('appointment_date'),
+                    data.get('appointment_time'),
+                    data.get('vehicle_details'),
+                    data.get('service'),
+                    data.get('remarks')
+                ))
+                appointment_id = cur.fetchone()[0]
+
+            conn.commit()
             logger.info(f"Successfully created record for {data['customer_phone_number']}")
             return appointment_id
 
@@ -136,21 +158,35 @@ class AppointmentService(metaclass=SingletonMeta):
         conn = None
         try:
             # Connect to the DB
-            conn = self.db_client
-            conn.connect()
+            conn = self.db_client.connect()
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
-            # Create filters using the phone number
-            filters = {"customer_phone_number": phone_number}
+            # Select appointment using explicit SQL
+            sql_query = """
+                        SELECT id, \
+                               customer_name, \
+                               customer_phone_number, \
+                               appointment_date, \
+                               appointment_time, \
+                               vehicle_details, \
+                               service, \
+                               remarks, \
+                               created_at
+                        FROM appointments
+                        WHERE customer_phone_number = %s; \
+                        """
 
-            # Perform the GET operation
-            records = conn.read(self.table_name, filters)
-            if not records:
+            # Execute the query
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(sql_query, (phone_number,))
+                result = cur.fetchone()
+
+            if not result:
                 raise AppointmentNotFoundError(
                     detail=f"Phone: {phone_number} does not have any appointments"
                 )
-            return records[0]
+            return dict(result)
 
         except (DatabaseConnectionException, psycopg2.Error) as e:
             error_message = (
@@ -183,28 +219,54 @@ class AppointmentService(metaclass=SingletonMeta):
         conn = None
         try:
             # Connect to the DB
-            conn = self.db_client
-            conn.connect()
+            conn = self.db_client.connect()
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
-            # Create filters using the phone number
+            # Extract the customer phone number
             phone_number = data['customer_phone_number']
-            filters = {"customer_phone_number": phone_number}
 
-            # Perform the update operation
-            updated_record = self.db_client.update(
-                table=self.table_name,
-                data=data,
-                filters=filters
-            )
-            if not updated_record:
+            # Build dynamic UPDATE query based on provided fields
+            update_fields = []
+            values = []
+            for key, value in data.items():
+                if key != 'customer_phone_number' and value is not None:
+                    update_fields.append(f"{key} = %s")
+                    values.append(value)
+
+            # Check for valid fields
+            if not update_fields:
+                logger.warning(f"No fields to update for phone number {phone_number}")
+                return True
+
+            # Add phone number for WHERE clause
+            values.append(phone_number)
+
+            # Formulate the SQL query
+            sql_query = f"""
+                UPDATE appointments
+                SET {', '.join(update_fields)}
+                WHERE customer_phone_number = %s
+                RETURNING id;
+            """
+
+            # Execute the query
+            with conn.cursor() as cur:
+                cur.execute(sql_query, tuple(values))
+                result = cur.fetchone()
+            conn.commit()
+
+            if not result:
                 raise AppointmentNotFoundError(
                     detail=f"Phone: {phone_number} does not have any appointments to update with."
                 )
+
+            logger.info(f"Successfully updated appointment for {phone_number}")
             return True
 
         except (DatabaseConnectionException, psycopg2.Error) as e:
+            if conn:
+                conn.rollback()
             error_message = (
                 f"There was an error establishing connection to the DB during updating an appointment: {str(e)}"
             )
@@ -212,12 +274,16 @@ class AppointmentService(metaclass=SingletonMeta):
             raise DatabaseConnectionException(error_message)
 
         except AppointmentNotFoundError as e:
+            if conn:
+                conn.rollback()
             logger.error(
                 f"There was an error occurred while updating an appointment: {str(e)}"
             )
             raise
 
         except Exception as e:
+            if conn:
+                conn.rollback()
             logger.error(
                 f"There was an error occurred while updating an appointment: {str(e)}"
             )
@@ -234,27 +300,34 @@ class AppointmentService(metaclass=SingletonMeta):
         conn = None
         try:
             # Connect to the DB
-            conn = self.db_client
-            conn.connect()
+            conn = self.db_client.connect()
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database.")
 
-            # Create filters using the phone number
-            filters = {"customer_phone_number": phone_number}
+            # Delete appointment using explicit SQL
+            sql_query = """
+                        DELETE \
+                        FROM appointments
+                        WHERE customer_phone_number = %s RETURNING id; \
+                        """
 
-            # Perform the delete operation
-            success = conn.delete(
-                table=self.table_name,
-                filters=filters
-            )
-            if not success:
+            # Execute the query
+            with conn.cursor() as cur:
+                cur.execute(sql_query, (phone_number,))
+                result = cur.fetchone()
+            conn.commit()
+
+            if not result:
                 raise AppointmentNotFoundError(
                     detail=f"Phone: {phone_number} does not have any appointments to delete."
                 )
 
-            return success
+            logger.info(f"Successfully deleted appointment for {phone_number}")
+            return True
 
         except (DatabaseConnectionException, psycopg2.Error) as e:
+            if conn:
+                conn.rollback()
             error_message = (
                 f"There was an error establishing connection to the DB during deleting an appointment: {str(e)}"
             )
@@ -262,12 +335,16 @@ class AppointmentService(metaclass=SingletonMeta):
             raise DatabaseInitializationException(error_message)
 
         except AppointmentNotFoundError as e:
+            if conn:
+                conn.rollback()
             logger.error(
                 f"There was an error occurred while deleting an appointment: {str(e)}"
             )
             raise
 
         except Exception as e:
+            if conn:
+                conn.rollback()
             logger.error(f"There was an error occurred while deleting an appointment: {str(e)}")
             raise
 

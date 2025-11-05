@@ -1,6 +1,4 @@
 from pydantic import BaseModel
-from datetime import date, time
-from typing import Optional
 
 from app.models.appointment.appointment_request_model import AppointmentRequestModel
 from app.models.enum.response_status import ResponseStatus
@@ -26,5 +24,5 @@ class UpdateAppointmentResponse(BaseModel):
 
 class DeleteAppointmentResponse(BaseModel):
     phone_number: str
-    deleted: bool
+    is_appointment_deleted: bool
     status: ResponseStatus
