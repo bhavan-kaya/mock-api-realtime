@@ -6,7 +6,7 @@ from datetime import datetime
 class SaveContactRequest(BaseModel):
     """Request model for saving contact information"""
     customer_name: str = Field(..., description="Name of the customer", min_length=1)
-    contact_number: str = Field(..., description="Phone number of the customer", pattern=r'^\+?[0-9]{10,15}$')
+    contact_number: str = Field(..., description="Phone number of the customer")
     date: Optional[datetime] = Field(None, description="Date of contact (defaults to current time)")
     
     class Config:
@@ -21,7 +21,7 @@ class SaveContactRequest(BaseModel):
 
 class GetContactRequest(BaseModel):
     """Request model for getting contact information"""
-    contact_number: str = Field(..., description="Phone number to search", pattern=r'^\+?[0-9]{10,15}$')
+    contact_number: str = Field(..., description="Phone number to search", )
     
     class Config:
         json_schema_extra = {
@@ -33,7 +33,7 @@ class GetContactRequest(BaseModel):
 
 class DeleteContactRequest(BaseModel):
     """Request model for deleting contact information"""
-    contact_number: str = Field(..., description="Phone number to delete", pattern=r'^\+?[0-9]{10,15}$')
+    contact_number: str = Field(..., description="Phone number to delete")
     
     class Config:
         json_schema_extra = {
