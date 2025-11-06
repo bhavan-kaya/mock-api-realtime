@@ -217,15 +217,25 @@ class ContactInfoService(metaclass=SingletonMeta):
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database")
 
+            # Retrieves the contact details with summary from the previous conversation
             sql_query = f"""
-                SELECT id,
-                       customer_name,
-                       contact_number,
-                       date,
-                       created_at,
-                       updated_at
-                FROM {self.table_name}
-                WHERE contact_number = %s;
+                SELECT 
+                    u.id,
+                    u.customer_name,
+                    u.contact_number,
+                    u.date,
+                    u.created_at,
+                    u.updated_at,
+                    s.summary
+                FROM {self.table_name} u
+                LEFT JOIN customers cu 
+                    ON cu.phone_number = u.contact_number
+                LEFT JOIN calls c 
+                    ON c.customer_id = cu.customer_id
+                LEFT JOIN summaries s 
+                    ON s.call_id = c.call_id
+                WHERE u.contact_number = %s
+                ORDER BY c.created_time DESC
             """
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
