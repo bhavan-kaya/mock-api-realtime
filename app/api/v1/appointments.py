@@ -51,7 +51,7 @@ async def create_appointment(appointment: AppointmentRequestModel):
         appointment_id = appointment_service.create_appointment(customer_data)
         return CreateAppointmentResponse(
             appointment_id=appointment_id,
-            data=data,
+            data=customer_data,
             status=ResponseStatus.SUCCESS
         )
 
@@ -201,7 +201,7 @@ async def delete_appointment_by_phone_number(
 
         return DeleteAppointmentResponse(
             phone_number=phone_number,
-            deleted=success,
+            is_appointment_deleted=success,
             status=response_status
         )
 
