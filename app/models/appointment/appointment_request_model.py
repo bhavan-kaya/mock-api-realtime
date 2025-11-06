@@ -18,7 +18,6 @@ class AppointmentRequestModel(BaseModel):
         ...,
         min_length=1,
         max_length=20,
-        pattern=r'^\+?[0-9]{10,15}$',
         description="Customer's phone number"
     )
     appointment_date: date

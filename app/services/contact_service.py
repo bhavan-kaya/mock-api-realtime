@@ -7,6 +7,7 @@ from app.services.db_service import PostgresClient
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from config import CONTACT_INFO_TABLE_NAME, APPOINTMENTS_TABLE_NAME
 from app.exceptions.database.database_connection_exception import DatabaseConnectionException
 from app.exceptions.database.database_initialization_exception import DatabaseInitializationException
 from singleton import SingletonMeta
@@ -15,7 +16,7 @@ from singleton import SingletonMeta
 logger = logging.getLogger(__name__)
 
 # Define the DB table name
-TABLE_NAME = "users_contact_info"
+
 
 
 class ContactAlreadyExistsException(Exception):
@@ -39,7 +40,7 @@ class ContactInfoService(metaclass=SingletonMeta):
     """
     def __init__(self):
         self.db_client = PostgresClient()
-        self.table_name = TABLE_NAME
+        self.table_name = CONTACT_INFO_TABLE_NAME
         
         # Initialize the db tables
         self._initialize_db()
@@ -412,7 +413,7 @@ class ContactInfoService(metaclass=SingletonMeta):
 
     def delete_contact_by_phone(self, contact_number: str) -> bool:
         """
-        Delete contact information by phone number
+        Delete contact information by phone number and cascade delete associated appointments
         
         Args:
             contact_number: Contact phone number to delete
@@ -427,14 +428,26 @@ class ContactInfoService(metaclass=SingletonMeta):
             if not conn:
                 raise DatabaseConnectionException(detail="Could not connect to database")
 
-            sql_query = f"""
+            # First, delete associated appointments
+            delete_appointments_query = f"""
+                DELETE FROM {APPOINTMENTS_TABLE_NAME}
+                WHERE customer_phone_number = %s;
+            """
+            
+            # Then delete the contact
+            delete_contact_query = f"""
                 DELETE FROM {self.table_name}
                 WHERE contact_number = %s
                 RETURNING id;
             """
             
             with conn.cursor() as cur:
-                cur.execute(sql_query, (contact_number,))
+                # Delete appointments first
+                cur.execute(delete_appointments_query, (contact_number,))
+                deleted_appointments = cur.rowcount
+                
+                # Then delete contact
+                cur.execute(delete_contact_query, (contact_number,))
                 result = cur.fetchone()
             
             conn.commit()
@@ -444,7 +457,10 @@ class ContactInfoService(metaclass=SingletonMeta):
                     detail=f"No contact found to delete for: {contact_number}"
                 )
             
-            logger.info(f"Contact deleted successfully for: {contact_number}")
+            logger.info(
+                f"Contact deleted successfully for: {contact_number}. "
+                f"Also deleted {deleted_appointments} associated appointment(s)"
+            )
             return True
         
         except psycopg2.Error as e:

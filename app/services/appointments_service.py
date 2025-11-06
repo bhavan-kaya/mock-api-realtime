@@ -9,6 +9,7 @@ from app.exceptions.appointment.appointment_exceptions import (
     AppointmentNotFoundError,
     AppointmentAlreadyExistsError
 )
+from config import APPOINTMENTS_TABLE_NAME
 from app.exceptions.database.database_connection_exception import DatabaseConnectionException
 from app.exceptions.database.database_initialization_exception import DatabaseInitializationException
 from app.services.db_service import PostgresClient
@@ -19,7 +20,7 @@ from singleton import SingletonMeta
 logger = logging.getLogger(__name__)
 
 # Define the DB table name
-TABLE_NAME = "appointments"
+
 
 
 class AppointmentService(metaclass=SingletonMeta):
@@ -29,7 +30,7 @@ class AppointmentService(metaclass=SingletonMeta):
     """
     def __init__(self):
         self.db_client = PostgresClient()
-        self.table_name = TABLE_NAME
+        self.table_name = APPOINTMENTS_TABLE_NAME
 
         # Initialize the db tables
         self._initialize_db()
@@ -49,7 +50,7 @@ class AppointmentService(metaclass=SingletonMeta):
 
             create_table_query = f"""
             CREATE TABLE IF NOT EXISTS {self.table_name} (
-                id UUID PRIMARY KEY,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 customer_name VARCHAR(255) NOT NULL,
                 customer_phone_number VARCHAR(20) NOT NULL UNIQUE,
                 appointment_date DATE NOT NULL,
@@ -124,7 +125,7 @@ class AppointmentService(metaclass=SingletonMeta):
 
             conn.commit()
             logger.info(f"Successfully created record for {data['customer_phone_number']}")
-            return appointment_id
+            return str(appointment_id)
 
         except UniqueViolation:
             # Rollback the changes
