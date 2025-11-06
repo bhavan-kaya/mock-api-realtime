@@ -61,6 +61,22 @@ class ContactResponse(BaseModel):
         }
 
 
+class GetContactResponse(ContactResponse):
+    """Response model for contact information"""
+    summary: Optional[str] = Field(None, description="Summary of the conversation")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "customer_name": "John Smith",
+                "contact_number": "+947036252123",
+                "date": "2025-10-28T10:30:00",
+                "summary": "Summary of the conversation"
+            }
+        }
+
+
 class ContactListResponse(BaseModel):
     """Response model for list of contacts"""
     contacts: list[ContactResponse] = Field(..., description="List of contact records")

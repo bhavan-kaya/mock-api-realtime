@@ -7,6 +7,7 @@ from app.models.contact_model import (
     GetContactRequest,
     DeleteContactRequest,
     ContactResponse,
+    GetContactResponse,
     ContactListResponse,
     StatusResponse
 )
@@ -77,7 +78,7 @@ async def save_contact(contact: SaveContactRequest):
 
 @router.get(
     "",
-    response_model=ContactResponse,
+    response_model=GetContactResponse,
     responses={
         400: {"description": "Invalid phone number format"},
         404: {"description": "Contact not found"},
@@ -94,7 +95,7 @@ async def get_contact(
         phone_number: The phone number to search
         
     Returns:
-        ContactResponse: The contact data
+        GetContactResponse: The contact data with previous conversation summary
         
     Raises:
         HTTPException: If contact is not found, phone number is invalid, or an error occurs
@@ -112,7 +113,7 @@ async def get_contact(
                 detail={"detail": f"Contact not found for phone number: {decoded_phone}"}
             )
 
-        return ContactResponse(**contact)
+        return GetContactResponse(**contact)
 
     except HTTPException:
         raise
