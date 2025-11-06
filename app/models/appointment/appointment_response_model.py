@@ -5,13 +5,13 @@ from app.models.enum.response_status import ResponseStatus
 
 
 class CreateAppointmentResponse(BaseModel):
-    appointment_id: int
+    appointment_id: str
     data: AppointmentRequestModel
     status: ResponseStatus
 
 
 class GetAppointmentByPhoneNumberResponse(BaseModel):
-    appointment_id: int
+    appointment_id: str
     data: AppointmentRequestModel
     status: ResponseStatus
 

@@ -184,6 +184,9 @@ Query: {query}
 Context: {information}"""
 
 
+APPOINTMENTS_TABLE_NAME = "appointments"
+CONTACT_INFO_TABLE_NAME = "users_contact_info"
+
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "voice-demo")
 CONNECTION_STRING = os.getenv(
     "CONNECTION_STRING",
@@ -201,7 +204,8 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
 COLLECTION_ID = os.getenv("COLLECTION_ID", "88c3eb96-b1cc-41cd-9c9c-c4270982aaa8")
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", 8080))
+PORT = int(os.getenv("PORT", 8081))
 APP_DEBUG = os.getenv("APP_DEBUG", False)
 VERBOSE = os.getenv("VERBOSE", False)
 REALTIME_MAX_TOKENS = os.getenv("REALTIME_MAX_TOKENS", 6000)
+
