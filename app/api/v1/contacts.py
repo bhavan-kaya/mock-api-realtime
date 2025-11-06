@@ -1,5 +1,6 @@
 from urllib.parse import unquote
 from fastapi import APIRouter, status, HTTPException, Query
+import logging
 
 from app.models.contact_model import (
     SaveContactRequest,
@@ -9,13 +10,18 @@ from app.models.contact_model import (
     ContactListResponse,
     StatusResponse
 )
-from app.services.contact_service import ContactInfoService
+from app.services.contact_service import (
+    ContactInfoService,
+    ContactNotFoundException,  
+    ContactAlreadyExistsException
+)
+from app.exceptions.database.database_connection_exception import DatabaseConnectionException
 from typing import Optional
 
-# Initialize the router
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/contacts")
 
-# Initialize service
 contact_service = ContactInfoService()
 
 
@@ -165,48 +171,46 @@ async def update_contact(
 ):
     """
     Update an existing contact.
-    
-    Args:
-        phone_number: The phone number of the contact to update
-        customer_name: New customer name (optional)
-        new_phone_number: New phone number (optional)
-        
-    Returns:
-        StatusResponse: Success message
-        
-    Raises:
-        HTTPException: If contact is not found, data is invalid, or an error occurs
     """
     try:
         # Decode URL-encoded phone number
         decoded_phone = unquote(phone_number)
 
-        # Update the contact
+        # Update the contact - this will raise ContactNotFoundException if not found
         success = contact_service.update_contact_by_phone(
             contact_number=decoded_phone,
             customer_name=customer_name,
             new_contact_number=new_phone_number
         )
 
-        if success:
-            return StatusResponse(
-                status="success",
-                message="Contact updated successfully"
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"detail": f"Contact not found for phone number: {decoded_phone}"}
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"detail": f"Failed to update contact: {str(e)}"}
+        return StatusResponse(
+            status="success",
+            message="Contact updated successfully"
         )
 
+    except ContactNotFoundException as e:
+        # Handle the case when contact is not found - return 404
+        logger.warning(f"Contact not found for update: {decoded_phone}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.detail
+        )
+    
+    except DatabaseConnectionException as e:
+        # Handle database connection errors - return 503
+        logger.error(f"Database connection error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.detail
+        )
+    
+    except Exception as e:
+        # Handle any other unexpected errors - return 500
+        logger.error(f"Unexpected error while updating contact: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update contact: {str(e)}"
+        )
 
 @router.delete(
     "",
@@ -236,24 +240,34 @@ async def delete_contact(
         # Decode URL-encoded phone number
         decoded_phone = unquote(phone_number)
 
-        # Delete the contact
+        # Delete the contact - this will raise ContactNotFoundException if not found
         success = contact_service.delete_contact_by_phone(decoded_phone)
 
-        if success:
-            return StatusResponse(
-                status="success",
-                message="Contact deleted successfully"
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"detail": f"Contact not found for phone number: {decoded_phone}"}
-            )
+        return StatusResponse(
+            status="success",
+            message="Contact deleted successfully"
+        )
 
-    except HTTPException:
-        raise
+    except ContactNotFoundException as e:
+        # Handle the case when contact is not found - return 404
+        logger.warning(f"Contact not found for deletion: {decoded_phone}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.detail
+        )
+    
+    except DatabaseConnectionException as e:
+        # Handle database connection errors - return 503
+        logger.error(f"Database connection error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.detail
+        )
+    
     except Exception as e:
+        # Handle any other unexpected errors - return 500
+        logger.error(f"Unexpected error while deleting contact: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"detail": f"Failed to delete contact: {str(e)}"}
+            detail=f"Failed to delete contact: {str(e)}"
         )
